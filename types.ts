@@ -1,3 +1,4 @@
+
 export enum SearchType {
   Articles = "Scientific Articles",
   Patents = "Patents",
@@ -7,6 +8,7 @@ export enum SearchType {
 export enum ModelProvider {
     GoogleAI = 'Google AI',
     Ollama = 'Ollama',
+    HuggingFace = 'Hugging Face',
 }
 
 export enum AgentType {

@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS } from './constants';
@@ -7,6 +8,7 @@ import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
 import WorkspaceView from './components/ResultsDisplay';
 import { ToastContainer } from './components/Toast';
+import DebugLogView from './components/DebugLogView';
 
 const getInitialGamificationState = (): GamificationState => {
   const achievements = Object.entries(ACHIEVEMENTS).reduce((acc, [key, value]) => {
@@ -44,6 +46,15 @@ const App: React.FC = () => {
   const [gamification, setGamification] = useState<GamificationState>(getInitialGamificationState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
+
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+    
+  const addLog = useCallback((message: string) => {
+      const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const finalMessage = `[${timestamp}] ${message}`;
+      console.log(finalMessage);
+      setDebugLog(prev => [finalMessage, ...prev].slice(0, 100));
+  }, []);
 
   // --- Ascension Framework Logic ---
   const updateAscensionState = useCallback((action: string, payload?: any) => {
@@ -142,6 +153,7 @@ const App: React.FC = () => {
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
     if (!topic.trim()) return;
 
+    addLog(`Dispatching agent "${agentType}" for topic: "${topic}"`);
     updateAscensionState('DISPATCH_AGENT');
     setIsLoading(true);
     setError(null);
@@ -156,7 +168,8 @@ const App: React.FC = () => {
     };
 
     try {
-      const response = await dispatchAgent(topic, agentType, model);
+      const response = await dispatchAgent(topic, agentType, model, addLog);
+      addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
       
       setWorkspace(prev => {
         const baseWorkspace = prev || currentWorkspace;
@@ -171,6 +184,7 @@ const App: React.FC = () => {
             nodesAdded = newNodes.length;
             const newEdges = response.knowledgeGraph.edges; // for simplicity, overwrite edges
             if (nodesAdded > 0) {
+                 addLog(`Adding ${nodesAdded} new nodes to the knowledge graph.`);
                  newGraph = {
                     nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
                     edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
@@ -190,36 +204,46 @@ const App: React.FC = () => {
 
     } catch (e) {
       if (e instanceof Error) {
-        setError(e.message);
+        addLog(`ERROR in handleDispatchAgent: ${e.message}`);
+        if (model.provider === ModelProvider.HuggingFace && (e.message.includes('Failed to fetch') || e.message.includes('Failed to run model'))) {
+             setError('Failed to load the Hugging Face model. This can be caused by a network issue, an ad blocker, or a temporary problem with the model servers. Please check your connection, disable browser extensions like ad blockers, and try again. If the problem persists, try selecting a different model.');
+        } else {
+            setError(e.message);
+        }
       } else {
+        addLog(`ERROR in handleDispatchAgent: An unknown agent error occurred.`);
         setError('An unknown agent error occurred.');
       }
     } finally {
       setIsLoading(false);
     }
-  }, [topic, model, hasSearched, workspace, updateAscensionState]);
+  }, [topic, model, hasSearched, workspace, updateAscensionState, addLog]);
 
   const handleSynthesize = useCallback(async () => {
     if (!workspace?.items || workspace.items.length === 0) return;
 
+    addLog('Synthesizing findings...');
     updateAscensionState('SYNTHESIZE');
     setIsSynthesizing(true);
     setSynthesisError(null);
     setWorkspace(prev => prev ? {...prev, synthesis: null} : null);
 
     try {
-      const response = await synthesizeFindings(workspace.topic, workspace.items, model);
+      const response = await synthesizeFindings(workspace.topic, workspace.items, model, addLog);
+      addLog('Synthesis complete.');
       setWorkspace(prev => prev ? {...prev, synthesis: response} : null);
     } catch (e) {
       if (e instanceof Error) {
+        addLog(`ERROR during synthesis: ${e.message}`);
         setSynthesisError(e.message);
       } else {
+        addLog('ERROR during synthesis: An unknown error occurred.');
         setSynthesisError('An unknown error occurred during synthesis.');
       }
     } finally {
       setIsSynthesizing(false);
     }
-  }, [workspace, model, updateAscensionState]);
+  }, [workspace, model, updateAscensionState, addLog]);
   
     const handleTopicChange = (newTopic: string) => {
         setTopic(newTopic);
@@ -234,13 +258,14 @@ const App: React.FC = () => {
       const intervention = INTERVENTIONS.find(i => i.id === interventionId);
       const updatedState = applyIntervention(interventionId);
       setTrajectoryState(updatedState);
+      addLog(`Applied intervention: ${intervention?.name || 'None'}`);
       
       if (intervention?.type === 'radical') {
           if (!gamification.achievements.TRANSHUMANIST.unlocked) {
                updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: updatedState.overallScore.projection[0].value, isRadical: true });
           }
       }
-  }, [gamification.achievements.TRANSHUMANIST.unlocked, updateAscensionState]);
+  }, [gamification.achievements.TRANSHUMANIST.unlocked, updateAscensionState, addLog]);
 
   const dismissToast = (id: number) => {
     setToasts(currentToasts => currentToasts.filter(t => t.id !== id));
@@ -279,6 +304,7 @@ const App: React.FC = () => {
         <p>Built for the For Immortality AI Hackathon.</p>
         <p>&copy; 2024 Longevity Analyst Workbench. All data is for informational purposes only.</p>
       </footer>
+      <DebugLogView logs={debugLog} />
     </div>
   );
 };

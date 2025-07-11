@@ -1,6 +1,8 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, type ModelDefinition, ModelProvider, AgentType } from '../types';
+import { searchDuckDuckGo, type SearchResult } from './searchService';
+import { generateTextWithHuggingFace } from './huggingFaceService';
 
 if (!process.env.API_KEY) {
     console.warn("API_KEY environment variable not set. Google AI models will not work.");
@@ -9,8 +11,9 @@ if (!process.env.API_KEY) {
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const OLLAMA_BASE_URL = 'http://localhost:11434/api/generate';
 
-const callOllamaAPI = async (modelId: string, systemInstruction: string, userPrompt: string, isJson: boolean = false): Promise<string> => {
+const callOllamaAPI = async (modelId: string, systemInstruction: string, userPrompt: string, isJson: boolean = false, addLog: (msg: string) => void): Promise<string> => {
     const fullPrompt = `${systemInstruction}\n\n${userPrompt}`;
+    addLog(`[Ollama] Calling model '${modelId}'...`);
     
     try {
         const response = await fetch(OLLAMA_BASE_URL, {
@@ -28,26 +31,32 @@ const callOllamaAPI = async (modelId: string, systemInstruction: string, userPro
 
         if (!response.ok) {
             const errorBody = await response.text();
+            addLog(`[Ollama] ERROR: API request failed with status ${response.status}: ${errorBody}`);
             throw new Error(`Ollama API request failed with status ${response.status}: ${errorBody}`);
         }
 
         const data = await response.json();
+        addLog(`[Ollama] Successfully received response from model '${modelId}'.`);
         return data.response; 
 
     } catch (error) {
-        console.error("Error calling Ollama API:", error);
+        addLog(`[Ollama] ERROR: Failed to connect to Ollama server. ${error}`);
         throw new Error("Failed to connect to local Ollama server. Is it running at http://localhost:11434?");
     }
 }
 
-const buildAgentPrompts = (query: string, agentType: AgentType): { systemInstruction: string, userPrompt: string, responseSchema?: any } => {
+const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: string): { systemInstruction: string, userPrompt: string, responseSchema?: any } => {
     const jsonOutputInstruction = "You MUST output your findings as a single, valid JSON object and NOTHING ELSE. Do not include any explanatory text, markdown formatting, or any other characters outside of the main JSON object.";
+    
+    const contextPreamble = searchContext 
+        ? `Based *only* on the following web search results, fulfill the user's request.\n\n<SEARCH_RESULTS>\n${searchContext}\n</SEARCH_RESULTS>\n\n`
+        : '';
 
     switch (agentType) {
         case AgentType.GeneAnalyst:
             return {
                 systemInstruction: `You are an AI agent specializing in bioinformatics (OpenGenes AI). Your task is to extract genes related to a query. ${jsonOutputInstruction}`,
-                userPrompt: `For the research topic "${query}", identify the top 5 most relevant genes discussed in scientific literature. Respond with a JSON object with a single key 'genes'. This key should contain an array of objects, where each object has "symbol" (string), "name" (string), and "summary" (string).`,
+                userPrompt: `${contextPreamble}For the research topic "${query}", identify the top 5 most relevant genes discussed in the provided text. Respond with a JSON object with a single key 'genes'. This key should contain an array of objects, where each object has "symbol" (string), "name" (string), and "summary" (string).`,
                 responseSchema: {
                     type: Type.OBJECT, properties: { genes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { symbol: { type: Type.STRING }, name: { type: Type.STRING }, summary: { type: Type.STRING } } } } }
                 }
@@ -55,7 +64,7 @@ const buildAgentPrompts = (query: string, agentType: AgentType): { systemInstruc
         case AgentType.CompoundAnalyst:
             return {
                 systemInstruction: `You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract compounds related to a query. ${jsonOutputInstruction}`,
-                userPrompt: `For the research topic "${query}", find the top 5 compounds mentioned in patents or papers. Respond with a JSON object with a single key 'compounds'. This key should contain an array of objects, where each object has "name" (string), "mechanism" (string), and "source" (string, e.g., patent number or publication).`,
+                userPrompt: `${contextPreamble}For the research topic "${query}", find the top 5 compounds mentioned in the provided text. Respond with a JSON object with a single key 'compounds'. This key should contain an array of objects, where each object has "name" (string), "mechanism" (string), and "source" (string, e.g., patent number or publication).`,
                 responseSchema: {
                      type: Type.OBJECT, properties: { compounds: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, mechanism: { type: Type.STRING }, source: { type: Type.STRING } } } } }
                 }
@@ -63,10 +72,10 @@ const buildAgentPrompts = (query: string, agentType: AgentType): { systemInstruc
         case AgentType.KnowledgeNavigator:
         default:
             return {
-                systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a knowledge graph. ${jsonOutputInstruction}`,
-                userPrompt: `Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
-- "articles" should be an array of the top 3 most relevant scientific articles, where each article object has "title", "summary", and "authors" (string of authors).
-- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}).`,
+                systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a knowledge graph from the provided text. ${jsonOutputInstruction}`,
+                userPrompt: `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
+- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present).
+- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}) derived from the content.`,
                 responseSchema: {
                     type: Type.OBJECT, properties: {
                         articles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, summary: { type: Type.STRING }, authors: { type: Type.STRING } } } },
@@ -82,9 +91,10 @@ const buildAgentPrompts = (query: string, agentType: AgentType): { systemInstruc
     }
 };
 
-const parseAgentResponse = (jsonText: string, agentType: AgentType): AgentResponse => {
+const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg: string) => void): AgentResponse => {
     try {
         const data = JSON.parse(jsonText);
+        addLog(`[Parser] Successfully parsed JSON for ${agentType}.`);
         let items: WorkspaceItem[] = [];
         let knowledgeGraph: KnowledgeGraph | null = null;
 
@@ -119,91 +129,163 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType): AgentRespon
         return { items, knowledgeGraph: knowledgeGraph ?? undefined };
 
     } catch (error) {
-        console.error(`Error parsing response for ${agentType}:`, error, `\nRaw text: ${jsonText}`);
-        // Fallback for non-JSON or malformed responses
+        addLog(`[Parser] ERROR: Error parsing response for ${agentType}: ${error}\nRaw text: ${jsonText}`);
         return { items: [{ id: 'fallback-item', type: 'article', title: 'Raw Response', summary: jsonText, details: 'Could not parse structured data.' }] };
     }
 };
 
 
-export const dispatchAgent = async (query: string, agentType: AgentType, model: ModelDefinition): Promise<AgentResponse> => {
-    const { systemInstruction, userPrompt, responseSchema } = buildAgentPrompts(query, agentType);
+export const dispatchAgent = async (query: string, agentType: AgentType, model: ModelDefinition, addLog: (msg: string) => void): Promise<AgentResponse> => {
     
     try {
         let jsonText: string;
         let uniqueSources: GroundingSource[] = [];
 
-        if (model.provider === ModelProvider.Ollama) {
-            jsonText = await callOllamaAPI(model.id, systemInstruction, userPrompt, true);
-        } else {
-             if (!process.env.API_KEY) throw new Error("API_KEY is not set. Please set it to use Google AI models.");
+        if (model.provider === ModelProvider.HuggingFace) {
+            addLog(`[HuggingFace] Using in-browser model. Web search is not applicable.`);
+            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType);
+
+            jsonText = await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, addLog);
+
+            // Hugging Face models often wrap JSON in markdown or have trailing text.
+            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+                jsonText = jsonMatch[1];
+                addLog('[HuggingFace] Extracted JSON from markdown code block.');
+            } else {
+                const firstBrace = jsonText.indexOf('{');
+                const lastBrace = jsonText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace > firstBrace) {
+                    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+                    addLog('[HuggingFace] Extracted JSON by finding curly braces.');
+                } else {
+                    addLog(`[HuggingFace] WARN: Could not extract structured JSON from response, using raw text. This may cause parsing errors.`);
+                    jsonText = jsonText; // Use raw text as a fallback
+                }
+            }
+            uniqueSources = []; // No external sources for in-browser models
+        
+        } else if (model.provider === ModelProvider.Ollama) {
+            addLog(`[Ollama] Using local model. Attempting web search for context...`);
+            const searchResults: SearchResult[] = await searchDuckDuckGo(query, addLog);
+            
+            const searchContext = searchResults.length > 0 
+                ? searchResults.map((r, i) => `[CONTEXT ${i+1}]\nURL: ${r.link}\nTITLE: ${r.title}\nCONTENT: ${r.snippet}`).join('\n\n')
+                : '';
+            
+            let { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, searchContext);
+
+            if (!searchContext) {
+                addLog('[Ollama] WARN: Web search returned no results or failed. The model will use internal knowledge only.');
+                systemInstruction += "\n\nIMPORTANT INSTRUCTION: You have been provided with NO web search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, figures, sources, or web links. If you do not know the answer, say so.";
+            } else {
+                addLog(`[Ollama] Web search successful. Providing ${searchResults.length} results to the model as context.`);
+            }
+            
+            jsonText = await callOllamaAPI(model.id, systemInstruction, userPrompt, true, addLog);
+            uniqueSources = searchResults.map(r => ({ uri: r.link, title: r.title }));
+
+        } else { // Google AI provider
+            addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
+            if (!process.env.API_KEY) {
+                addLog(`[GoogleAI] ERROR: API_KEY is not set.`);
+                throw new Error("API_KEY is not set. Please set it to use Google AI models.");
+            }
+            
+            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType);
+            
+            addLog(`[GoogleAI] Calling model '${model.id}'...`);
             const response = await ai.models.generateContent({
                 model: model.id,
                 contents: userPrompt,
                 config: {
                     systemInstruction,
                     tools: [{ googleSearch: {} }],
-                    // Per Gemini API guidelines, tools (like googleSearch) cannot be used with `responseMimeType: 'application/json'`
-                    // or `responseSchema`. We rely on the prompt to request a JSON response and parse the text output.
                 },
             });
-            const rawText = response.text;
             
-            // The model may return markdown with a json block, or other text.
-            // We need to robustly extract the JSON part.
+            if (!response || !response.text || typeof response.text !== 'string' || response.text.trim() === '') {
+                const finishReason = response?.candidates?.[0]?.finishReason;
+                const safetyRatings = response?.candidates?.[0]?.safetyRatings;
+                const errorMessage = `Google AI response was empty, invalid, or blocked. Finish Reason: ${finishReason || 'N/A'}. Safety: ${JSON.stringify(safetyRatings, null, 2) || 'N/A'}`;
+                addLog(`[GoogleAI] ERROR: ${errorMessage}`);
+                addLog(`[GoogleAI] Full response object: ${JSON.stringify(response, null, 2)}`);
+                throw new Error(errorMessage);
+            }
+
+            const rawText = response.text;
+            addLog(`[GoogleAI] Received valid response. Length: ${rawText.length}. Attempting to parse JSON.`);
+            
             const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
             if (jsonMatch && jsonMatch[1]) {
                 jsonText = jsonMatch[1];
+                 addLog('[GoogleAI] Extracted JSON from markdown code block.');
             } else {
-                // If no markdown block, assume the JSON starts at the first '{' and ends at the last '}'
                 const firstBrace = rawText.indexOf('{');
                 const lastBrace = rawText.lastIndexOf('}');
                 if (firstBrace !== -1 && lastBrace > firstBrace) {
                     jsonText = rawText.substring(firstBrace, lastBrace + 1);
+                    addLog('[GoogleAI] Extracted JSON by finding curly braces.');
                 } else {
-                    // Fallback to the raw text, which will likely fail parsing and be caught below.
                     jsonText = rawText;
+                     addLog('[GoogleAI] WARN: Could not extract structured JSON, using raw text. This may cause parsing errors.');
                 }
             }
 
             const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
             const webSources: GroundingSource[] = groundingMetadata?.groundingChunks?.map(chunk => chunk.web).filter((web): web is { uri: string; title?: string } => !!web?.uri).map(web => ({ uri: web.uri, title: web.title || web.uri })) ?? [];
             uniqueSources = Array.from(new Map(webSources.map(item => [item.uri, item])).values());
+            addLog(`[GoogleAI] Extracted ${uniqueSources.length} unique web sources from grounding metadata.`);
         }
 
-        const agentResponse = parseAgentResponse(jsonText, agentType);
+        const agentResponse = parseAgentResponse(jsonText, agentType, addLog);
         agentResponse.sources = uniqueSources;
         return agentResponse;
 
     } catch (error) {
-        console.error(`Error in dispatchAgent for ${agentType}:`, error);
         let errorMessage = "An unknown error occurred.";
         if (error instanceof Error) errorMessage = error.message;
+        addLog(`[dispatchAgent] FATAL ERROR for ${agentType}: ${errorMessage}`);
         throw new Error(`Failed to get data from AI Agent: ${errorMessage}`);
     }
 };
 
-export const synthesizeFindings = async (query: string, items: WorkspaceItem[], model: ModelDefinition): Promise<string> => {
+export const synthesizeFindings = async (query: string, items: WorkspaceItem[], model: ModelDefinition, addLog: (msg: string) => void): Promise<string> => {
     const resultsText = items.map(i => `Type: ${i.type}\nTitle: ${i.title}\nSummary: ${i.summary}`).join('\n---\n');
+    addLog(`[Synthesize] Starting synthesis for "${query}" with ${items.length} items using model ${model.id}.`);
     const systemInstruction = `You are a world-class bioinformatics and longevity research scientist. Your task is to analyze a collection of data (articles, genes, compounds) and provide a high-level synthesis and a novel hypothesis. The output must be well-structured, clear, and scientifically plausible. Use Markdown for formatting: use **bold** for headings and use bullet points for lists (e.g., '* item').`;
     const userPrompt = `Based on the original research topic "${query}" and the following data, provide two sections:\n\n1.  **Synthesis**: A concise synthesis of the key findings, connecting the different data types (genes, compounds, etc.).\n2.  **Novel Hypothesis**: A novel, testable research hypothesis that connects these findings or proposes a corrective action for the "incorrect development" represented by the topic.\n\nHere is the collected data:\n${resultsText}`;
 
     try {
+        if (model.provider === ModelProvider.HuggingFace) {
+            return await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, addLog);
+        }
+
         if (model.provider === ModelProvider.Ollama) {
-            return await callOllamaAPI(model.id, systemInstruction, userPrompt);
+            return await callOllamaAPI(model.id, systemInstruction, userPrompt, false, addLog);
         }
         
+        addLog(`[Synthesize] Calling Google AI model '${model.id}'.`);
         if (!process.env.API_KEY) throw new Error("API_KEY is not set. Please set it to use Google AI models.");
         const response = await ai.models.generateContent({
             model: model.id,
             contents: userPrompt,
             config: { systemInstruction, temperature: 0.7 },
         });
+
+        if (!response.text) {
+             const finishReason = response?.candidates?.[0]?.finishReason;
+             const errorMessage = `Synthesis response was empty. Finish Reason: ${finishReason}`;
+             addLog(`[Synthesize] ERROR: ${errorMessage}`);
+             throw new Error(errorMessage);
+        }
+
+        addLog(`[Synthesize] Received response from Google AI.`);
         return response.text;
     } catch (error) {
-        console.error("Error calling AI for synthesis:", error);
         let errorMessage = "An unknown error occurred during synthesis.";
         if (error instanceof Error) errorMessage = error.message;
+        addLog(`[Synthesize] ERROR: ${errorMessage}`);
         throw new Error(`Failed to synthesize data from AI service: ${errorMessage}`);
     }
 };
