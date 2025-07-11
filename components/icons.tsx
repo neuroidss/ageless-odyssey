@@ -100,8 +100,47 @@ export const TrendingDownIcon = ({className = "h-5 w-5"}) => (
 
 export const TrophyIcon = ({className = "h-6 w-6"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
-        <path d="M18 2h- телевизоры 2a1 1 0 0 0-1 1v2.43a8 8 0 0 1 0 9.14V17a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.43a8 8 0 0 1 0-9.14V3a1 1 0 0 0-1-1Zm-5 2.51V3a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v1.51a3.99 3.99 0 0 1 0 7.98V14a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1.51a3.99 3.99 0 0 1 0-7.98Z" />
+        <path d="M18 2h-2a1 1 0 0 0-1 1v2.43a8 8 0 0 1 0 9.14V17a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.43a8 8 0 0 1 0-9.14V3a1 1 0 0 0-1-1Zm-5 2.51V3a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v1.51a3.99 3.99 0 0 1 0 7.98V14a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1.51a3.99 3.99 0 0 1 0-7.98Z" />
         <path d="M12 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
         <path d="M13 22H7a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1.17a3 3 0 0 0 2.83-2H6a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-.83a3 3 0 0 0-2.83 2H13a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1Z" />
+    </svg>
+);
+
+export const DnaIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2-2 .9-2 2zM18 4c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2-2 .9-2 2zM6 6s.5 2 2.5 2S11 6 11 6M13 18s.5-2 2.5-2 2.5 2 2.5 2M11 6c0 2.5 2 4.5 2 4.5s2-2 2-4.5M6 18c0-2.5 2-4.5 2-4.5S10 11.5 10 14"/>
+        <path d="M4 11.5c0 2 2 4.5 2 4.5s2-2.5 2-4.5"/>
+        <path d="M18 11.5c0 2-2 4.5-2 4.5s-2-2.5-2-4.5"/>
+    </svg>
+);
+
+export const MemicIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1-.7l-.7.7M5.6 18.4l.7-.7m12.1.7l-.7-.7"/>
+        <circle cx="12" cy="12" r="2"/>
+        <path d="M12 14v2a2 2 0 0 0 2 2h2"/>
+        <path d="M10 20h2a2 2 0 0 0 2-2v-2"/>
+        <path d="M12 8V6a2 2 0 0 1 2-2h2"/>
+        <path d="M10 4h2a2 2 0 0 1 2 2v2"/>
+        <path d="M14 12h2a2 2 0 0 1 2 2v2"/>
+        <path d="M20 10v2a2 2 0 0 1-2 2h-2"/>
+        <path d="M8 12H6a2 2 0 0 0-2 2v2"/>
+        <path d="M4 10v2a2 2 0 0 0 2 2h2"/>
+    </svg>
+);
+
+export const CognitiveIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2a10 10 0 0 0-3.5 19.33V18a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3.33A10 10 0 0 0 12 2Z"/>
+        <path d="M8 18a4 4 0 0 0 4 4 4 4 0 0 0 4-4h-8Z"/>
+        <path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+        <path d="M19.33 15.5a2 2 0 0 1 0-7"/>
+        <path d="M4.67 15.5a2 2 0 0 0 0-7"/>
+    </svg>
+);
+
+export const AscensionIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2.6l3.3 6.6 7.3.9-5.4 5.1 1.4 7.2L12 19l-6.6 3.4 1.4-7.2-5.4-5.1 7.3-.9L12 2.6z M12 5.5l-2.2 4.4-4.9.6 3.6 3.4-.9 4.8L12 16.3l4.4 2.2-.9-4.8 3.6-3.4-4.9-.6L12 5.5z"/>
     </svg>
 );

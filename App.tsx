@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
-import { SUPPORTED_MODELS, ACHIEVEMENTS, XP_FOR_LEVEL, XP_VALUES } from './constants';
+import { SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS } from './constants';
 import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
 import WorkspaceView from './components/ResultsDisplay';
@@ -15,9 +15,12 @@ const getInitialGamificationState = (): GamificationState => {
   }, {} as GamificationState['achievements']);
   
   return {
-    level: 1,
-    xp: 0,
-    xpToNextLevel: XP_FOR_LEVEL(1),
+    realm: Realm.MortalBaseline,
+    vectors: {
+      genetic: 0,
+      memic: 0,
+      cognitive: 0,
+    },
     longevityScore: 0,
     achievements,
   };
@@ -42,66 +45,68 @@ const App: React.FC = () => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
 
-  // Game Event Handler
-  const handleGameEvent = useCallback((action: keyof typeof XP_VALUES | 'ACHIEVEMENT_CHECK', payload?: any) => {
+  // --- Ascension Framework Logic ---
+  const updateAscensionState = useCallback((action: string, payload?: any) => {
     setGamification(prev => {
-        let xpGained = 0;
+        let newVectors = { ...prev.vectors };
         const newToasts: ToastMessage[] = [];
-        let updatedState = JSON.parse(JSON.stringify(prev)); // Deep copy for mutation
-
-        if(action !== 'ACHIEVEMENT_CHECK') {
-            xpGained = XP_VALUES[action] || 0;
-        }
-
-        // --- Achievement Checks ---
-        if (action === 'DISPATCH_AGENT' && !updatedState.achievements.FIRST_RESEARCH.unlocked) {
-            updatedState.achievements.FIRST_RESEARCH.unlocked = true;
-            const ach = updatedState.achievements.FIRST_RESEARCH;
-            xpGained += ach.xp;
-            newToasts.push({ id: Date.now(), title: 'Achievement Unlocked!', message: ach.name, icon: 'achievement' });
-        }
-        if (action === 'SYNTHESIZE' && !updatedState.achievements.SYNTHESIZER.unlocked) {
-            updatedState.achievements.SYNTHESIZER.unlocked = true;
-            const ach = updatedState.achievements.SYNTHESIZER;
-            xpGained += ach.xp;
-            newToasts.push({ id: Date.now(), title: 'Achievement Unlocked!', message: ach.name, icon: 'achievement' });
-        }
-        if (action === 'APPLY_INTERVENTION' && !updatedState.achievements.BIO_STRATEGIST.unlocked) {
-            updatedState.achievements.BIO_STRATEGIST.unlocked = true;
-            const ach = updatedState.achievements.BIO_STRATEGIST;
-            xpGained += ach.xp;
-            newToasts.push({ id: Date.now(), title: 'Achievement Unlocked!', message: ach.name, icon: 'achievement' });
-        }
-        if (payload?.knowledgeGraph?.nodes?.length >= 5 && !updatedState.achievements.KNOWLEDGE_ARCHITECT.unlocked) {
-            updatedState.achievements.KNOWLEDGE_ARCHITECT.unlocked = true;
-            const ach = updatedState.achievements.KNOWLEDGE_ARCHITECT;
-            xpGained += ach.xp;
-            newToasts.push({ id: Date.now(), title: 'Achievement Unlocked!', message: ach.name, icon: 'achievement' });
-        }
-        if (payload?.exploredTopicsCount >= 3 && !updatedState.achievements.HALLMARK_EXPLORER.unlocked) {
-             updatedState.achievements.HALLMARK_EXPLORER.unlocked = true;
-            const ach = updatedState.achievements.HALLMARK_EXPLORER;
-            xpGained += ach.xp;
-            newToasts.push({ id: Date.now(), title: 'Achievement Unlocked!', message: ach.name, icon: 'achievement' });
-        }
-        if (updatedState.longevityScore >= 550 && !updatedState.achievements.SCORE_MILESTONE_1.unlocked) {
-             updatedState.achievements.SCORE_MILESTONE_1.unlocked = true;
-            const ach = updatedState.achievements.SCORE_MILESTONE_1;
-            xpGained += ach.xp;
-            newToasts.push({ id: Date.now(), title: 'Achievement Unlocked!', message: ach.name, icon: 'achievement' });
-        }
+        let updatedState = { ...prev, vectors: newVectors };
+        let newAchievements = { ...prev.achievements };
         
-        // --- XP & Level Up ---
-        if (xpGained > 0) {
-            updatedState.xp += xpGained;
-            while (updatedState.xp >= updatedState.xpToNextLevel) {
-                updatedState.level += 1;
-                updatedState.xp -= updatedState.xpToNextLevel;
-                updatedState.xpToNextLevel = XP_FOR_LEVEL(updatedState.level);
-                newToasts.push({ id: Date.now() + 1, title: 'Level Up!', message: `You've reached Level ${updatedState.level}!`, icon: 'levelup' });
+        // 1. Update Vectors based on actions
+        switch(action) {
+            case 'DISPATCH_AGENT':
+                newVectors.memic += VECTOR_POINTS.MEMIC.DISPATCH_AGENT;
+                break;
+            case 'SYNTHESIZE':
+                newVectors.memic += VECTOR_POINTS.MEMIC.SYNTHESIZE;
+                break;
+            case 'NEW_TOPIC':
+                newVectors.memic += VECTOR_POINTS.MEMIC.NEW_TOPIC;
+                break;
+            case 'UPDATE_KNOWLEDGE_GRAPH':
+                newVectors.memic += (payload.nodesAdded || 0) * VECTOR_POINTS.MEMIC.BUILD_GRAPH_NODE;
+                break;
+            case 'UPDATE_TRAJECTORY': {
+                const newLongevityScore = Math.max(0, (100 - payload.biologicalAge) * 10);
+                updatedState.longevityScore = newLongevityScore;
+                newVectors.cognitive = newLongevityScore; // Cognitive vector is directly tied to the score
+                
+                if (payload.interventionEffect) {
+                    newVectors.genetic += Math.round(payload.interventionEffect * VECTOR_POINTS.GENETIC.BIOMARKER_IMPROVEMENT_MULTIPLIER);
+                }
+                if (payload.isRadical) {
+                    newVectors.genetic += VECTOR_POINTS.GENETIC.RADICAL_INTERVENTION_BONUS;
+                    if (!newAchievements.TRANSHUMANIST.unlocked) {
+                        newAchievements.TRANSHUMANIST.unlocked = true;
+                        newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.TRANSHUMANIST.name, icon: 'achievement' });
+                    }
+                }
+                break;
             }
         }
         
+        // 2. Check for Realm Advancement
+        const currentRealmDef = REALM_DEFINITIONS.find(r => r.realm === updatedState.realm);
+        const nextRealmIndex = REALM_DEFINITIONS.indexOf(currentRealmDef!) - 1;
+
+        if (nextRealmIndex >= 0) {
+            const nextRealmDef = REALM_DEFINITIONS[nextRealmIndex];
+            if (
+                updatedState.vectors.cognitive >= nextRealmDef.thresholds.cognitive &&
+                updatedState.vectors.genetic >= nextRealmDef.thresholds.genetic &&
+                updatedState.vectors.memic >= nextRealmDef.thresholds.memic
+            ) {
+                updatedState.realm = nextRealmDef.realm;
+                newToasts.push({ id: Date.now(), title: 'Realm Ascension!', message: `You have ascended to the Realm of the ${nextRealmDef.realm}.`, icon: 'ascension' });
+                if (!newAchievements.REALM_ASCENSION.unlocked && nextRealmDef.realm === Realm.OptimizedMortal) {
+                   newAchievements.REALM_ASCENSION.unlocked = true;
+                }
+            }
+        }
+        
+        updatedState.achievements = newAchievements;
+
         if (newToasts.length > 0) {
             setToasts(prevToasts => [...prevToasts, ...newToasts]);
         }
@@ -110,31 +115,34 @@ const App: React.FC = () => {
     });
   }, []);
 
+
   useEffect(() => {
-    setTrajectoryState(getInitialTrajectory());
+    const initialState = getInitialTrajectory();
+    setTrajectoryState(initialState);
+    const biologicalAge = initialState.overallScore.projection[0].value;
+    const longevityScore = Math.max(0, (100 - biologicalAge) * 10);
+    setGamification(prev => ({...prev, longevityScore, vectors: {...prev.vectors, cognitive: longevityScore}}));
   }, []);
 
   // Effect to update score and check achievements when trajectory changes
   useEffect(() => {
     if (trajectoryState) {
         const biologicalAge = trajectoryState.overallScore.projection[0].value;
-        const longevityScore = Math.max(0, (100 - biologicalAge) * 10);
-        setGamification(prev => ({...prev, longevityScore}));
-        handleGameEvent('ACHIEVEMENT_CHECK');
+        let interventionEffect = 0;
+        let isRadical = trajectoryState.isRadicalInterventionActive;
+        if (trajectoryState.activeInterventionId && trajectoryState.overallScore.interventionProjection) {
+            const baselineFuture = trajectoryState.overallScore.projection[10].value;
+            const interventionFuture = trajectoryState.overallScore.interventionProjection[10].value;
+            interventionEffect = baselineFuture - interventionFuture;
+        }
+        updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge, interventionEffect, isRadical });
     }
-  }, [trajectoryState, handleGameEvent]);
-
-  // Effect to check graph-based achievements when workspace updates
-  useEffect(() => {
-    if (workspace) {
-        handleGameEvent('ACHIEVEMENT_CHECK', { knowledgeGraph: workspace.knowledgeGraph });
-    }
-  }, [workspace, handleGameEvent]);
+  }, [trajectoryState, updateAscensionState]);
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
     if (!topic.trim()) return;
 
-    handleGameEvent('DISPATCH_AGENT');
+    updateAscensionState('DISPATCH_AGENT');
     setIsLoading(true);
     setError(null);
     if (!hasSearched) setHasSearched(true);
@@ -155,8 +163,22 @@ const App: React.FC = () => {
         const newItems = response.items.filter(newItem => !baseWorkspace.items.some(existing => existing.id === newItem.id));
         const newSources = response.sources?.filter(newSrc => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
         
-        const newGraph = response.knowledgeGraph || baseWorkspace.knowledgeGraph;
-
+        let newGraph = baseWorkspace.knowledgeGraph;
+        let nodesAdded = 0;
+        if(response.knowledgeGraph) {
+            const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id));
+            const newNodes = response.knowledgeGraph.nodes.filter(n => !existingNodeIds.has(n.id));
+            nodesAdded = newNodes.length;
+            const newEdges = response.knowledgeGraph.edges; // for simplicity, overwrite edges
+            if (nodesAdded > 0) {
+                 newGraph = {
+                    nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
+                    edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
+                 }
+                 updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
+            }
+        }
+        
         return {
             ...baseWorkspace,
             topic: topic,
@@ -175,12 +197,12 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [topic, model, hasSearched, workspace, handleGameEvent]);
+  }, [topic, model, hasSearched, workspace, updateAscensionState]);
 
   const handleSynthesize = useCallback(async () => {
     if (!workspace?.items || workspace.items.length === 0) return;
 
-    handleGameEvent('SYNTHESIZE');
+    updateAscensionState('SYNTHESIZE');
     setIsSynthesizing(true);
     setSynthesisError(null);
     setWorkspace(prev => prev ? {...prev, synthesis: null} : null);
@@ -197,26 +219,28 @@ const App: React.FC = () => {
     } finally {
       setIsSynthesizing(false);
     }
-  }, [workspace, model, handleGameEvent]);
+  }, [workspace, model, updateAscensionState]);
   
     const handleTopicChange = (newTopic: string) => {
         setTopic(newTopic);
         if (!exploredTopics.has(newTopic)) {
             const newExplored = new Set(exploredTopics).add(newTopic);
             setExploredTopics(newExplored);
-            handleGameEvent('NEW_TOPIC');
-            handleGameEvent('ACHIEVEMENT_CHECK', { exploredTopicsCount: newExplored.size });
+            updateAscensionState('NEW_TOPIC');
         }
     }
 
   const handleApplyIntervention = useCallback((interventionId: string | null) => {
-      if (!trajectoryState) return;
+      const intervention = INTERVENTIONS.find(i => i.id === interventionId);
       const updatedState = applyIntervention(interventionId);
       setTrajectoryState(updatedState);
-      if (interventionId) {
-          handleGameEvent('APPLY_INTERVENTION');
+      
+      if (intervention?.type === 'radical') {
+          if (!gamification.achievements.TRANSHUMANIST.unlocked) {
+               updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: updatedState.overallScore.projection[0].value, isRadical: true });
+          }
       }
-  }, [trajectoryState, handleGameEvent]);
+  }, [gamification.achievements.TRANSHUMANIST.unlocked, updateAscensionState]);
 
   const dismissToast = (id: number) => {
     setToasts(currentToasts => currentToasts.filter(t => t.id !== id));

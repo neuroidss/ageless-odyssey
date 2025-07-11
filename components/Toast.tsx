@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ToastMessage } from '../types';
-import { TrophyIcon, TrendingUpIcon } from './icons';
+import { TrophyIcon, TrendingUpIcon, AscensionIcon } from './icons';
 
 export const Toast: React.FC<{ toast: ToastMessage, onDismiss: (id: number) => void }> = ({ toast, onDismiss }) => {
     const [visible, setVisible] = useState(false);
@@ -18,7 +18,8 @@ export const Toast: React.FC<{ toast: ToastMessage, onDismiss: (id: number) => v
 
     const icons = {
         achievement: <TrophyIcon className="h-8 w-8 text-yellow-400" />,
-        levelup: <TrendingUpIcon className="h-8 w-8 text-green-400" />
+        levelup: <TrendingUpIcon className="h-8 w-8 text-green-400" />,
+        ascension: <AscensionIcon className="h-8 w-8 text-purple-400" />,
     };
 
     return (

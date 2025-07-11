@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { GamificationState } from '../types';
-import { TrophyIcon } from './icons';
+import { GamificationState, Realm } from '../types';
+import { TrophyIcon, DnaIcon, MemicIcon, CognitiveIcon } from './icons';
+import { REALM_DEFINITIONS } from '../constants';
 
 const AchievementCard: React.FC<{ achievement: GamificationState['achievements'][string] }> = ({ achievement }) => {
     return (
@@ -14,33 +15,41 @@ const AchievementCard: React.FC<{ achievement: GamificationState['achievements']
     );
 };
 
+const VectorDisplay: React.FC<{ icon: React.ReactNode; label: string; value: number; color: string }> = ({ icon, label, value, color }) => (
+    <div className="flex-1 flex flex-col items-center gap-1 p-2 rounded-lg bg-slate-900/50">
+        <div className={`h-8 w-8 ${color}`}>{icon}</div>
+        <div className="text-sm font-semibold text-slate-300">{label}</div>
+        <div className={`text-xl font-bold ${color}`}>{Math.round(value)}</div>
+    </div>
+);
+
 
 const GamificationDashboard: React.FC<{ gamification: GamificationState }> = ({ gamification }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const xpPercentage = gamification.xpToNextLevel > 0 ? (gamification.xp / gamification.xpToNextLevel) * 100 : 0;
+    const realmInfo = REALM_DEFINITIONS.find(r => r.realm === gamification.realm)!;
 
     return (
         <>
-            <div className="w-full max-w-sm p-3 bg-slate-800/50 border border-slate-700 rounded-xl flex items-center justify-between gap-4">
-                <div className="flex-1">
-                    <div className="flex justify-between items-baseline mb-1">
-                        <span className="font-bold text-lg text-slate-200">Level {gamification.level}</span>
-                        <span className="text-xs text-slate-400">{gamification.xp} / {gamification.xpToNextLevel} XP</span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2.5">
-                        <div className="bg-gradient-to-r from-teal-400 to-blue-500 h-2.5 rounded-full" style={{ width: `${xpPercentage}%` }}></div>
-                    </div>
+            <div className="w-full max-w-2xl p-4 bg-slate-800/50 border border-slate-700 rounded-2xl flex flex-col gap-4 shadow-lg">
+                <div className="text-center">
+                    <div className="text-sm text-purple-300 font-semibold tracking-wider">CURRENT REALM</div>
+                    <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-500">{realmInfo.realm}</h2>
+                    <p className="text-xs text-slate-400 mt-1">{realmInfo.description}</p>
                 </div>
-                <div className="text-center px-4 border-l border-r border-slate-600">
-                    <div className="text-xs text-slate-400">Score</div>
-                    <div className="font-bold text-2xl text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400">{Math.round(gamification.longevityScore)}</div>
+                
+                <div className="flex items-stretch justify-center gap-3 pt-3 border-t border-slate-700">
+                    <VectorDisplay icon={<DnaIcon />} label="Genetic Legacy" value={gamification.vectors.genetic} color="text-teal-400" />
+                    <VectorDisplay icon={<MemicIcon />} label="Memic Influence" value={gamification.vectors.memic} color="text-blue-400" />
+                    <VectorDisplay icon={<CognitiveIcon />} label="Cognitive Integrity" value={gamification.vectors.cognitive} color="text-yellow-400" />
                 </div>
+
                 <button 
                     onClick={() => setIsModalOpen(true)}
-                    className="p-3 rounded-full bg-slate-700 hover:bg-slate-600 transition"
+                    className="mt-2 w-full py-2 bg-slate-700/70 hover:bg-slate-700 rounded-lg font-semibold text-sm text-slate-300 flex items-center justify-center gap-2"
                     aria-label="View Achievements"
                 >
-                    <TrophyIcon className="h-6 w-6 text-yellow-400" />
+                    <TrophyIcon className="h-4 w-4 text-yellow-400" />
+                    View Achievements
                 </button>
             </div>
 

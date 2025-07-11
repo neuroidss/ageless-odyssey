@@ -1,7 +1,8 @@
 import React from 'react';
-import { type TrajectoryState, type Biomarker } from '../types';
+import { type TrajectoryState, type Biomarker, Intervention } from '../types';
 import LineChart from './LineChart';
 import { TrajectoryIcon, TrendingUpIcon, TrendingDownIcon } from './icons';
+import { INTERVENTIONS } from '../constants';
 
 interface TrajectoryViewProps {
     trajectoryState: TrajectoryState;
@@ -19,15 +20,18 @@ const BiomarkerCard: React.FC<{ biomarker: Biomarker }> = ({ biomarker }) => {
         return <TrendingDownIcon className="h-5 w-5 text-red-400" />;
     };
     
+    const cardClasses = `bg-slate-800/50 p-4 rounded-lg border border-slate-700 flex flex-col transition-opacity duration-500 ${biomarker.bypassed ? 'opacity-30' : 'opacity-100'}`;
+    
     return (
-        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 flex flex-col">
+        <div className={cardClasses}>
             <div className="flex-grow">
                  <div className="flex justify-between items-start">
                     <h4 className="font-bold text-slate-200 text-md">{biomarker.name}</h4>
-                    <TrendIcon />
+                    {biomarker.bypassed ? null : <TrendIcon />}
                 </div>
                 <p className="text-2xl font-bold text-slate-100 my-1">
-                    {currentValue.toFixed(1)} <span className="text-base font-normal text-slate-400">{biomarker.unit}</span>
+                    {biomarker.bypassed ? 'Bypassed' : `${currentValue.toFixed(1)}`}
+                    {!biomarker.bypassed && <span className="text-base font-normal text-slate-400"> {biomarker.unit}</span>}
                 </p>
                 <p className="text-xs text-slate-500">{biomarker.description}</p>
             </div>
@@ -46,8 +50,11 @@ const BiomarkerCard: React.FC<{ biomarker: Biomarker }> = ({ biomarker }) => {
 
 
 const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onApplyIntervention }) => {
-    const { biomarkers, interventions, activeInterventionId, overallScore } = trajectoryState;
-    const currentScore = overallScore.projection[0].value;
+    const { biomarkers, activeInterventionId, overallScore, isRadicalInterventionActive } = trajectoryState;
+    const currentScore = (isRadicalInterventionActive && overallScore.interventionProjection) ? overallScore.interventionProjection[0].value : overallScore.projection[0].value;
+
+    const biologicalInterventions = INTERVENTIONS.filter(i => i.type === 'biological');
+    const radicalInterventions = INTERVENTIONS.filter(i => i.type === 'radical');
 
     return (
         <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
@@ -66,9 +73,9 @@ const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onAppl
                 <div className="lg:col-span-3 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                      <div className="flex flex-col md:flex-row justify-between md:items-center mb-4">
                         <div>
-                            <h3 className="text-lg font-bold text-slate-200">Overall Biological Age</h3>
+                            <h3 className="text-lg font-bold text-slate-200">{isRadicalInterventionActive ? "Effective Biological Age" : "Overall Biological Age"}</h3>
                             <p className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-yellow-400">{currentScore.toFixed(1)} <span className="text-2xl">years</span></p>
-                            <p className="text-sm text-slate-400">Lower is better. Score is a composite of all biomarkers.</p>
+                            <p className="text-sm text-slate-400">{isRadicalInterventionActive ? "Your consciousness now resides in a stable, non-aging substrate." : "Lower is better. Score is a composite of all biomarkers."}</p>
                         </div>
                         <div className="mt-4 md:mt-0">
                             <label htmlFor="intervention-select" className="block text-sm font-medium text-slate-300 mb-1">Simulate Intervention:</label>
@@ -79,9 +86,16 @@ const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onAppl
                                 className="w-full md:w-auto bg-slate-700 text-slate-200 font-semibold pl-3 pr-8 py-2 rounded-lg hover:bg-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all duration-300 border border-slate-600"
                             >
                                 <option value="">None (Baseline)</option>
-                                {interventions.map(i => (
-                                    <option key={i.id} value={i.id}>{i.name}</option>
-                                ))}
+                                <optgroup label="Biological Interventions">
+                                    {biologicalInterventions.map(i => (
+                                        <option key={i.id} value={i.id}>{i.name}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Radical Interventions">
+                                     {radicalInterventions.map(i => (
+                                        <option key={i.id} value={i.id}>{i.name}</option>
+                                    ))}
+                                </optgroup>
                             </select>
                         </div>
                     </div>

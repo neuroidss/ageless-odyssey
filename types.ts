@@ -23,7 +23,7 @@ export interface ModelDefinition {
 
 // A more generic item to hold data from any source
 export interface WorkspaceItem {
-  id: string;
+  id:string;
   type: 'article' | 'patent' | 'gene' | 'compound' | 'protein' | 'process';
   title: string;
   summary: string;
@@ -85,12 +85,14 @@ export interface Biomarker {
     history: TrajectoryDataPoint[];
     projection: TrajectoryDataPoint[];
     interventionProjection?: TrajectoryDataPoint[];
+    bypassed?: boolean; // New: To handle radical interventions
 }
 
 export interface Intervention {
     id: string;
     name: string;
     description: string;
+    type: 'biological' | 'radical';
     effects: Record<string, number>; // biomarkerId -> improvementFactor (e.g., 0.1 for 10% improvement)
 }
 
@@ -98,6 +100,7 @@ export interface TrajectoryState {
     biomarkers: Biomarker[];
     interventions: Intervention[];
     activeInterventionId: string | null;
+    isRadicalInterventionActive: boolean;
     overallScore: {
         history: TrajectoryDataPoint[];
         projection: TrajectoryDataPoint[];
@@ -105,20 +108,32 @@ export interface TrajectoryState {
     };
 }
 
-// Gamification Types
+// --- Gamification: The Ascension Framework ---
+
+export enum Realm {
+    MortalBaseline = "Mortal Baseline",
+    OptimizedMortal = "Optimized Mortal",
+    AgeReversalPioneer = "Age Reversal Pioneer",
+    BiologicalEscapeVelocity = "Biological Escape Velocity",
+    SubstrateIndependence = "Substrate Independence",
+}
+
 export interface Achievement {
   id: string;
   name: string;
   description: string;
   unlocked: boolean;
-  xp: number;
+  xp: number; // Keep XP for bonus points/achievements, but not for leveling
 }
 
 export interface GamificationState {
-  level: number;
-  xp: number;
-  xpToNextLevel: number;
-  longevityScore: number;
+  realm: Realm;
+  vectors: {
+    genetic: number;  // Represents biological integrity, improved by interventions
+    memic: number;    // Represents knowledge contribution, improved by research
+    cognitive: number;// Represents consciousness health, tied to longevity score
+  };
+  longevityScore: number; // The core metric driving the cognitive vector
   achievements: Record<string, Achievement>;
 }
 
@@ -126,5 +141,5 @@ export interface ToastMessage {
     id: number;
     title: string;
     message: string;
-    icon?: 'achievement' | 'levelup';
+    icon?: 'achievement' | 'levelup' | 'ascension';
 }
