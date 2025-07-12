@@ -249,7 +249,7 @@ export const dispatchAgent = async (
         } else { // Google AI provider
             addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
             if (setProgress) setProgress('Querying Google AI...');
-            const key = apiKey || process.env.API_KEY;
+            const key = (apiKey || process.env.API_KEY)?.trim();
             if (!key) {
                 addLog(`[GoogleAI] ERROR: API_KEY is not set.`);
                 throw new Error("API Key for Google AI is not provided. Please enter your key in the control panel.");
@@ -267,9 +267,17 @@ export const dispatchAgent = async (
             });
             
             if (!response || !response.text || typeof response.text !== 'string' || response.text.trim() === '') {
-                const finishReason = response?.candidates?.[0]?.finishReason;
-                const safetyRatings = response?.candidates?.[0]?.safetyRatings;
-                const errorMessage = `Google AI response was empty, invalid, or blocked. Finish Reason: ${finishReason || 'N/A'}. Safety: ${JSON.stringify(safetyRatings, null, 2) || 'N/A'}`;
+                const candidate = response?.candidates?.[0];
+                const finishReason = candidate?.finishReason;
+                const safetyRatings = candidate?.safetyRatings;
+                let errorMessage;
+
+                if (finishReason === 'SAFETY') {
+                    errorMessage = `The response was blocked due to safety concerns. Please modify your query. Safety Ratings: ${JSON.stringify(safetyRatings, null, 2)}`;
+                } else {
+                    errorMessage = `Google AI response was empty or invalid. Finish Reason: ${finishReason || 'N/A'}.`;
+                }
+                
                 addLog(`[GoogleAI] ERROR: ${errorMessage}`);
                 addLog(`[GoogleAI] Full response object: ${JSON.stringify(response, null, 2)}`);
                 throw new Error(errorMessage);
@@ -337,7 +345,7 @@ export const synthesizeFindings = async (
         }
         
         addLog(`[Synthesize] Calling Google AI model '${model.id}'.`);
-        const key = apiKey || process.env.API_KEY;
+        const key = (apiKey || process.env.API_KEY)?.trim();
         if (!key) {
             throw new Error("API Key for Google AI is not provided. Please enter your key in the control panel.");
         }
@@ -350,8 +358,15 @@ export const synthesizeFindings = async (
         });
 
         if (!response.text) {
-             const finishReason = response?.candidates?.[0]?.finishReason;
-             const errorMessage = `Synthesis response was empty. Finish Reason: ${finishReason}`;
+             const candidate = response?.candidates?.[0];
+             const finishReason = candidate?.finishReason;
+             const safetyRatings = candidate?.safetyRatings;
+             let errorMessage;
+             if (finishReason === 'SAFETY') {
+                errorMessage = `Synthesis was blocked due to safety concerns. Safety Ratings: ${JSON.stringify(safetyRatings, null, 2)}`;
+             } else {
+                errorMessage = `Synthesis response was empty. Finish Reason: ${finishReason || 'N/A'}.`;
+             }
              addLog(`[Synthesize] ERROR: ${errorMessage}`);
              throw new Error(errorMessage);
         }
