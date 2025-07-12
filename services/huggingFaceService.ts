@@ -1,7 +1,5 @@
 
 
-
-
 import { pipeline, type TextGenerationPipeline, type Chat } from '@huggingface/transformers';
 import type { HuggingFaceDevice } from '../types';
 
@@ -23,9 +21,10 @@ class HuggingFacePipelineManager {
      * @param quantization The model quantization type (e.g., 'q4', 'int8').
      * @param device The target device ('wasm' for CPU, 'webgpu' for GPU).
      * @param addLog A function to log progress.
+     * @param setProgress An optional function to update the UI with loading progress.
      * @returns A promise that resolves to the text generation pipeline.
      */
-    static async getInstance(modelId: string, quantization: string, device: HuggingFaceDevice, addLog: (msg: string) => void): Promise<TextGenerationPipeline> {
+    static async getInstance(modelId: string, quantization: string, device: HuggingFaceDevice, addLog: (msg: string) => void, setProgress?: (msg: string) => void): Promise<TextGenerationPipeline> {
         if (this.modelId !== modelId || this.quantization !== quantization || this.device !== device || !this.instance) {
             if (this.instance) {
                 addLog(`[HuggingFace v3] Disposing old model pipeline...`);
@@ -42,21 +41,31 @@ class HuggingFacePipelineManager {
             const pipelineOptions: {
                 device: HuggingFaceDevice;
                 dtype: string;
-                progress_callback: (progress: any) => void;
+                progress_callback?: (progress: any) => void;
             } = {
                 device: device,
                 dtype: quantization,
-                progress_callback: (progress: any) => {
-                    if (progress.status === 'progress') {
-                        const percentage = (progress.progress).toFixed(2);
-                        addLog(`[HuggingFace v3] Loading: ${progress.file} (${percentage}%)`);
-                    } else if (progress.status === 'done') {
-                        addLog(`[HuggingFace v3] Finished loading: ${progress.file}`);
-                    } else if (progress.status === 'ready') {
-                         addLog(`[HuggingFace v3] Model pipeline is ready.`);
-                    }
-                }
             };
+
+            if (setProgress) {
+                pipelineOptions.progress_callback = (progress: any) => {
+                    let logMsg = '';
+                    let progressMsg = '';
+                    if (progress.status === 'progress') {
+                        const percentage = (progress.progress).toFixed(1);
+                        logMsg = `[HuggingFace v3] Loading: ${progress.file} (${percentage}%)`;
+                        progressMsg = `Loading model: ${progress.file} (${percentage}%)`;
+                    } else if (progress.status === 'done') {
+                        logMsg = `[HuggingFace v3] Finished loading: ${progress.file}`;
+                        progressMsg = 'Finalizing model...';
+                    } else if (progress.status === 'ready') {
+                         logMsg = `[HuggingFace v3] Model pipeline is ready.`;
+                         progressMsg = 'Model ready, generating response...';
+                    }
+                    if (logMsg) addLog(logMsg);
+                    if (progressMsg && setProgress) setProgress(progressMsg);
+                };
+            }
             
             const createTextGenerationPipeline = pipeline as (
                 task: 'text-generation',
@@ -81,6 +90,7 @@ class HuggingFacePipelineManager {
  * @param quantization The model quantization type (e.g., 'q4', 'int8').
  * @param device The target device ('wasm' for CPU, 'webgpu' for GPU).
  * @param addLog A function to log messages for debugging.
+ * @param setProgress An optional function to update the UI with loading progress.
  * @returns A promise that resolves to the generated text.
  */
 export const generateTextWithHuggingFace = async (
@@ -89,12 +99,14 @@ export const generateTextWithHuggingFace = async (
     userPrompt: string, 
     quantization: string,
     device: HuggingFaceDevice,
-    addLog: (msg: string) => void
+    addLog: (msg: string) => void,
+    setProgress?: (msg: string) => void,
 ): Promise<string> => {
     
     try {
-        const generator = await HuggingFacePipelineManager.getInstance(modelId, quantization, device, addLog);
+        const generator = await HuggingFacePipelineManager.getInstance(modelId, quantization, device, addLog, setProgress);
         addLog(`[HuggingFace v3] Applying chat template for '${modelId}'...`);
+        if (setProgress) setProgress('Formatting prompt...');
 
         const messages: Chat = [
             { role: 'system', content: systemInstruction },
@@ -109,6 +121,7 @@ export const generateTextWithHuggingFace = async (
         }) as string;
 
         addLog(`[HuggingFace v3] Generating text with '${modelId}'...`);
+        if (setProgress) setProgress('Generating text with in-browser model...');
 
         // Generate text from the formatted prompt string.
         const output = await generator(promptText, {

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS } from '../constants';
@@ -102,6 +103,12 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
         </div>
       </div>
       
+      {isHuggingFaceModel && (
+        <div className="text-center px-4 py-2 text-sm text-yellow-300 bg-yellow-900/30 border border-yellow-700/50 rounded-lg max-w-3xl mx-auto">
+          <p><span className="font-bold">Note:</span> In-browser models run on your device. Performance can be slow, especially on the first run (model download). Results may be less accurate than cloud models.</p>
+        </div>
+      )}
+
       {needsApiKey && (
         <div className="text-center px-4">
           <input

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
 
@@ -187,6 +189,7 @@ const App: React.FC = () => {
     updateAscensionState('DISPATCH_AGENT');
     setIsLoading(true);
     setError(null);
+    setLoadingMessage('Dispatching Agent...');
     if (!hasSearched) setHasSearched(true);
     
     const currentWorkspace = workspace || {
@@ -198,7 +201,7 @@ const App: React.FC = () => {
     };
 
     try {
-      const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device);
+      const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device, setLoadingMessage);
       addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
       
       setWorkspace(prev => {
@@ -246,6 +249,7 @@ const App: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
+      setLoadingMessage('');
     }
   }, [topic, model, quantization, device, apiKey, hasSearched, workspace, updateAscensionState, addLog]);
 
@@ -324,6 +328,7 @@ const App: React.FC = () => {
           <WorkspaceView
             workspace={workspace}
             isLoading={isLoading && !workspace}
+            loadingMessage={loadingMessage}
             error={error}
             hasSearched={hasSearched}
             isSynthesizing={isSynthesizing}

@@ -142,6 +142,7 @@ export const dispatchAgent = async (
     addLog: (msg: string) => void, 
     apiKey?: string,
     device: HuggingFaceDevice = 'wasm',
+    setProgress?: (msg: string) => void,
 ): Promise<AgentResponse> => {
     
     addLog(`[dispatchAgent] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${query}"`);
@@ -155,6 +156,7 @@ export const dispatchAgent = async (
 
         if (!isGoogleModel) {
             addLog(`[Search] Local model detected (${model.provider}). Initiating web search for context...`);
+            if (setProgress) setProgress('Performing web search for context...');
             try {
                 const searchResults = await searchDuckDuckGo(query, addLog);
                 if (searchResults.length > 0) {
@@ -180,7 +182,7 @@ export const dispatchAgent = async (
         }
 
         if (model.provider === ModelProvider.HuggingFace) {
-            jsonText = await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog);
+            jsonText = await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog, setProgress);
 
             // Strategy: Find the last valid-looking JSON object in the model's output.
             // This is more robust against models that add conversational text or "think" blocks.
@@ -196,10 +198,12 @@ export const dispatchAgent = async (
             }
         
         } else if (model.provider === ModelProvider.Ollama) {
+            if (setProgress) setProgress('Querying local Ollama model...');
             jsonText = await callOllamaAPI(model.id, systemInstruction, userPrompt, true, addLog);
 
         } else { // Google AI provider
             addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
+            if (setProgress) setProgress('Querying Google AI...');
             const key = apiKey || process.env.API_KEY;
             if (!key) {
                 addLog(`[GoogleAI] ERROR: API_KEY is not set.`);
@@ -253,6 +257,7 @@ export const dispatchAgent = async (
             addLog(`[GoogleAI] Extracted ${uniqueSources.length} unique web sources from grounding metadata.`);
         }
 
+        if (setProgress) setProgress('Parsing results...');
         const agentResponse = parseAgentResponse(jsonText, agentType, addLog);
         agentResponse.sources = [...(agentResponse.sources || []), ...uniqueSources];
         return agentResponse;

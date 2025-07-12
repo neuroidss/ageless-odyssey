@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { type WorkspaceState, type WorkspaceItem, KnowledgeGraphNode, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
@@ -17,6 +18,7 @@ interface WorkspaceViewProps {
   onSelectTopic: (topic: string) => void;
   trajectoryState: TrajectoryState | null;
   onApplyIntervention: (interventionId: string | null) => void;
+  loadingMessage: string;
 }
 
 const NodeChip: React.FC<{ node: KnowledgeGraphNode }> = ({ node }) => {
@@ -117,9 +119,9 @@ const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
     )
 };
 
-const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, currentTopic, onSelectTopic, trajectoryState, onApplyIntervention }) => {
+const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, currentTopic, onSelectTopic, trajectoryState, onApplyIntervention, loadingMessage }) => {
   if (isLoading && !workspace) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner message={loadingMessage} />;
   }
 
   return (
@@ -166,7 +168,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                   {isSynthesizing ? 'Generating Insights...' : 'Synthesize & Hypothesize'}
               </button>
 
-              {isSynthesizing && <div className="pt-4"><LoadingSpinner /></div>}
+              {isSynthesizing && <div className="pt-4"><LoadingSpinner message="Generating Insights..." /></div>}
               
               {synthesisError && (
                   <div className="mt-4 text-center py-4 text-red-400 bg-red-900/20 border border-red-500 rounded-lg">
