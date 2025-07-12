@@ -31,12 +31,7 @@ const generateProjection = (startValue: number, yearlyChange: number, years: num
     return projection;
 };
 
-
-let cachedState: TrajectoryState | null = null;
-
 export const getInitialTrajectory = (): TrajectoryState => {
-    if (cachedState && !cachedState.isRadicalInterventionActive) return cachedState;
-    
     const baseValues = {
       telomere_length: { start: 7.5, change: -0.05, optimal: 10.0 },
       senescent_cells: { start: 5, change: 0.3, optimal: 0 },
@@ -71,7 +66,7 @@ export const getInitialTrajectory = (): TrajectoryState => {
     const overallScoreHistory = Array.from({length: 5}, (_, i) => ({ year: CURRENT_YEAR - (4-i), value: calculateBioAge(i-4) }));
     const overallScoreProjection = Array.from({length: 21}, (_, i) => ({ year: CURRENT_YEAR + i, value: calculateBioAge(i) }));
     
-    cachedState = {
+    return {
         biomarkers,
         interventions: INTERVENTIONS,
         activeInterventionId: null,
@@ -81,7 +76,6 @@ export const getInitialTrajectory = (): TrajectoryState => {
             projection: overallScoreProjection,
         }
     };
-    return cachedState;
 };
 
 export const applyIntervention = (interventionId: string | null): TrajectoryState => {
@@ -94,6 +88,14 @@ export const applyIntervention = (interventionId: string | null): TrajectoryStat
     if (!intervention) return state;
 
     const isRadical = intervention.type === 'radical';
+    
+    const baseValues = {
+      telomere_length: { start: 7.5, change: -0.05, optimal: 10.0 },
+      senescent_cells: { start: 5, change: 0.3, optimal: 0 },
+      mito_efficiency: { start: 90, change: -0.8, optimal: 100 },
+      epigenetic_noise: { start: 20, change: 0.5, optimal: 0 },
+      proteostasis: { start: 95, change: -0.7, optimal: 100 },
+    };
 
     if (isRadical && intervention.id === 'full_body_prosthesis') {
         // Handle the radical full-body replacement
@@ -105,8 +107,7 @@ export const applyIntervention = (interventionId: string | null): TrajectoryStat
         const newBioAge = 20; // The new "effective" biological age is a constant 20
         const overallInterventionProjection = generateProjection(newBioAge, 0);
 
-        cachedState = { ...state, activeInterventionId: interventionId, isRadicalInterventionActive: true, biomarkers: newBiomarkers, overallScore: {...state.overallScore, interventionProjection: overallInterventionProjection } };
-        return cachedState;
+        return { ...state, activeInterventionId: interventionId, isRadicalInterventionActive: true, biomarkers: newBiomarkers, overallScore: {...state.overallScore, interventionProjection: overallInterventionProjection } };
     }
 
     // Handle biological interventions
@@ -139,16 +140,5 @@ export const applyIntervention = (interventionId: string | null): TrajectoryStat
     }
     const overallInterventionProjection = Array.from({length: 21}, (_, i) => ({ year: CURRENT_YEAR + i, value: calculateInterventionBioAge(i) }));
 
-
-    cachedState = { ...state, activeInterventionId: interventionId, isRadicalInterventionActive: false, biomarkers: newBiomarkers, overallScore: {...state.overallScore, interventionProjection: overallInterventionProjection } };
-    return cachedState;
-};
-
-// Simple object to access base values outside the service if needed
-const baseValues = {
-  telomere_length: { start: 7.5, change: -0.05, optimal: 10.0 },
-  senescent_cells: { start: 5, change: 0.3, optimal: 0 },
-  mito_efficiency: { start: 90, change: -0.8, optimal: 100 },
-  epigenetic_noise: { start: 20, change: 0.5, optimal: 0 },
-  proteostasis: { start: 95, change: -0.7, optimal: 100 },
+    return { ...state, activeInterventionId: interventionId, isRadicalInterventionActive: false, biomarkers: newBiomarkers, overallScore: {...state.overallScore, interventionProjection: overallInterventionProjection } };
 };

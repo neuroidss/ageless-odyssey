@@ -11,6 +11,8 @@ import WorkspaceView from './components/ResultsDisplay';
 import { ToastContainer } from './components/Toast';
 import DebugLogView from './components/DebugLogView';
 
+const APP_STATE_STORAGE_KEY = 'agelessOdysseyState';
+
 const getInitialGamificationState = (): GamificationState => {
   const achievements = Object.entries(ACHIEVEMENTS).reduce((acc, [key, value]) => {
     acc[key] = { ...value, unlocked: false };
@@ -61,13 +63,76 @@ const App: React.FC = () => {
       setDebugLog(prev => [finalMessage, ...prev].slice(0, 100));
   }, []);
 
+  // --- State Persistence ---
+
+  // Load state from localStorage on initial mount
   useEffect(() => {
+    // Load API Key from session storage
     const savedKey = sessionStorage.getItem('google-api-key');
     if (savedKey) {
         setApiKey(savedKey);
         addLog("Loaded Google AI API Key from session storage.");
     }
+    
+    // Load main application state from local storage
+    try {
+        const savedStateJSON = localStorage.getItem(APP_STATE_STORAGE_KEY);
+        if (savedStateJSON) {
+            const savedState = JSON.parse(savedStateJSON);
+
+            if (savedState.topic) setTopic(savedState.topic);
+            const savedModel = SUPPORTED_MODELS.find(m => m.id === savedState.model?.id) || SUPPORTED_MODELS[0];
+            setModel(savedModel);
+            if (savedState.quantization) setQuantization(savedState.quantization);
+            if (savedState.device) setDevice(savedState.device);
+            if (savedState.workspace) setWorkspace(savedState.workspace);
+            if (savedState.hasSearched) setHasSearched(savedState.hasSearched);
+            if (savedState.trajectoryState) setTrajectoryState(savedState.trajectoryState);
+            if (savedState.gamification) setGamification(savedState.gamification);
+            if (savedState.exploredTopics) setExploredTopics(new Set(savedState.exploredTopics));
+
+            addLog("Successfully restored application state from previous session.");
+        } else {
+            // If no saved state, initialize with defaults
+            const initialState = getInitialTrajectory();
+            setTrajectoryState(initialState);
+            const biologicalAge = initialState.overallScore.projection[0].value;
+            const longevityScore = Math.max(0, (100 - biologicalAge) * 10);
+            setGamification(prev => ({...prev, longevityScore, vectors: {...prev.vectors, cognitive: longevityScore}}));
+            addLog("No saved state found. Initialized new session.");
+        }
+    } catch (error) {
+        addLog(`Failed to load state from localStorage: ${error}. Starting fresh session.`);
+        localStorage.removeItem(APP_STATE_STORAGE_KEY);
+        setTrajectoryState(getInitialTrajectory());
+    }
   }, [addLog]);
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    // Avoid saving the initial blank state on first load
+    if (!hasSearched && !workspace && !topic) {
+        return;
+    }
+
+    try {
+        const stateToSave = {
+            topic,
+            model,
+            quantization,
+            device,
+            workspace,
+            hasSearched,
+            trajectoryState,
+            gamification,
+            exploredTopics: Array.from(exploredTopics), // Convert Set to Array for JSON
+        };
+        localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (error) {
+        addLog(`Error saving state to localStorage: ${error}`);
+    }
+  }, [topic, model, quantization, device, workspace, hasSearched, trajectoryState, gamification, exploredTopics]);
+
 
   const handleApiKeyChange = (key: string) => {
       setApiKey(key);
@@ -151,15 +216,6 @@ const App: React.FC = () => {
         
         return updatedState;
     });
-  }, []);
-
-
-  useEffect(() => {
-    const initialState = getInitialTrajectory();
-    setTrajectoryState(initialState);
-    const biologicalAge = initialState.overallScore.projection[0].value;
-    const longevityScore = Math.max(0, (100 - biologicalAge) * 10);
-    setGamification(prev => ({...prev, longevityScore, vectors: {...prev.vectors, cognitive: longevityScore}}));
   }, []);
 
   // Effect to update score and check achievements when trajectory changes
@@ -300,6 +356,15 @@ const App: React.FC = () => {
           }
       }
   }, [gamification.achievements.TRANSHUMANIST.unlocked, updateAscensionState, addLog]);
+  
+  const handleResetState = useCallback(() => {
+    if (window.confirm("Are you sure you want to reset all your progress and saved data? This action cannot be undone.")) {
+        localStorage.removeItem(APP_STATE_STORAGE_KEY);
+        sessionStorage.removeItem('google-api-key');
+        addLog("User triggered a full state reset. Reloading the application...");
+        window.location.reload();
+    }
+  }, [addLog]);
 
   const dismissToast = (id: number) => {
     setToasts(currentToasts => currentToasts.filter(t => t.id !== id));
@@ -345,7 +410,7 @@ const App: React.FC = () => {
         <p>Built for the For Immortality AI Hackathon.</p>
         <p>&copy; 2024 Longevity Analyst Workbench. All data is for informational purposes only.</p>
       </footer>
-      <DebugLogView logs={debugLog} />
+      <DebugLogView logs={debugLog} onReset={handleResetState} />
     </div>
   );
 };
