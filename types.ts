@@ -24,7 +24,6 @@ export interface ModelDefinition {
     id: string;
     name: string;
     provider: ModelProvider;
-    quantizations?: string[];
 }
 
 // A more generic item to hold data from any source

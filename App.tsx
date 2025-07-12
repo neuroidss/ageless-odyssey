@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
-import { SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS } from './constants';
+import { SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS, DEFAULT_HUGGING_FACE_DEVICE, DEFAULT_HUGGING_FACE_QUANTIZATION } from './constants';
 import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
 import WorkspaceView from './components/ResultsDisplay';
@@ -32,8 +32,8 @@ const getInitialGamificationState = (): GamificationState => {
 const App: React.FC = () => {
   const [topic, setTopic] = useState<string>('');
   const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS[0]);
-  const [quantization, setQuantization] = useState<string>(SUPPORTED_MODELS[0].quantizations?.[0] ?? 'q4');
-  const [device, setDevice] = useState<HuggingFaceDevice>('wasm');
+  const [quantization, setQuantization] = useState<string>(DEFAULT_HUGGING_FACE_QUANTIZATION);
+  const [device, setDevice] = useState<HuggingFaceDevice>(DEFAULT_HUGGING_FACE_DEVICE);
   
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   
@@ -77,9 +77,9 @@ const App: React.FC = () => {
 
   const handleModelChange = (newModel: ModelDefinition) => {
     setModel(newModel);
-    if (newModel.provider === ModelProvider.HuggingFace && newModel.quantizations) {
-        setQuantization(newModel.quantizations[0]);
-        addLog(`Switched to Hugging Face model. Default quantization set to '${newModel.quantizations[0]}'.`);
+    if (newModel.provider === ModelProvider.HuggingFace) {
+        setQuantization(DEFAULT_HUGGING_FACE_QUANTIZATION);
+        addLog(`Switched to Hugging Face model. Default quantization set to '${DEFAULT_HUGGING_FACE_QUANTIZATION}'.`);
     }
   };
 

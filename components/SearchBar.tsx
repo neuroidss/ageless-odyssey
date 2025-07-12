@@ -1,7 +1,8 @@
 
+
 import React from 'react';
 import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice } from '../types';
-import { EXAMPLE_TOPICS, SUPPORTED_MODELS } from '../constants';
+import { EXAMPLE_TOPICS, SUPPORTED_MODELS, HUGGING_FACE_DEVICES, HUGGING_FACE_QUANTIZATIONS } from '../constants';
 import { AgentIcon, GeneAnalystIcon, CompoundAnalystIcon } from './icons';
 
 interface AgentControlPanelProps {
@@ -54,31 +55,30 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
                     aria-label="Select Execution Device"
                     className="appearance-none bg-slate-700 text-slate-200 font-semibold pl-3 pr-8 py-2 rounded-full hover:bg-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all duration-300 text-sm"
                   >
-                    <option value="wasm">CPU</option>
-                    <option value="webgpu">GPU</option>
+                    {HUGGING_FACE_DEVICES.map(d => (
+                        <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                   </div>
                 </div>
-                {model.quantizations && (
-                  <div className="relative">
-                    <select
-                      value={quantization}
-                      onChange={(e) => setQuantization(e.target.value)}
-                      disabled={isLoading}
-                      aria-label="Select Model Quantization"
-                      className="appearance-none bg-slate-700 text-slate-200 font-semibold pl-3 pr-8 py-2 rounded-full hover:bg-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all duration-300 text-sm"
-                    >
-                      {model.quantizations.map(q => (
-                          <option key={q} value={q} className="font-sans uppercase">{q}</option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
+                <div className="relative">
+                  <select
+                    value={quantization}
+                    onChange={(e) => setQuantization(e.target.value)}
+                    disabled={isLoading}
+                    aria-label="Select Model Quantization"
+                    className="appearance-none bg-slate-700 text-slate-200 font-semibold pl-3 pr-8 py-2 rounded-full hover:bg-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all duration-300 text-sm"
+                  >
+                    {HUGGING_FACE_QUANTIZATIONS.map(q => (
+                        <option key={q.value} value={q.value} className="font-sans">{q.label}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                   </div>
-                )}
+                </div>
               </>
             )}
              <div className="relative">

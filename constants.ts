@@ -1,6 +1,24 @@
 
 
-import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention } from './types';
+import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice } from './types';
+
+export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] = [
+    { label: 'wasm', value: 'wasm' },
+    { label: 'webgpu', value: 'webgpu' },
+];
+export const DEFAULT_HUGGING_FACE_DEVICE: HuggingFaceDevice = 'wasm';
+
+export const HUGGING_FACE_QUANTIZATIONS: {label: string, value: string}[] = [
+//    { label: '', value: '' }, // just model.onnx without _prefix
+    { label: 'bnb4', value: 'bnb4' },
+    { label: 'fp16', value: 'fp16' },
+    { label: 'int8', value: 'int8' },
+    { label: 'q4', value: 'q4' },
+    { label: 'q4f16', value: 'q4f16' },
+    { label: 'quantized', value: 'quantized' },
+    { label: 'uint8', value: 'uint8' },
+];
+export const DEFAULT_HUGGING_FACE_QUANTIZATION: string = 'int8';
 
 export const EXAMPLE_TOPICS = [
     "Telomere shortening",
@@ -12,10 +30,10 @@ export const EXAMPLE_TOPICS = [
 ];
 export const SUPPORTED_MODELS: ModelDefinition[] = [
     // Hugging Face Transformers.js (runs in-browser)
-    { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
-    { id: 'onnx-community/gemma-3n-E2B-it-ONNX', name: 'Gemma 3N E2B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
-    { id: 'onnx-community/Qwen3-4B-ONNX', name: 'Qwen3-4B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
-    { id: 'onnx-community/Qwen3-1.7B-ONNX', name: 'Qwen3-1.7B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
+    { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B (HF)', provider: ModelProvider.HuggingFace },
+    { id: 'onnx-community/gemma-3n-E2B-it-ONNX', name: 'Gemma 3N E2B (HF)', provider: ModelProvider.HuggingFace },
+    { id: 'onnx-community/Qwen3-4B-ONNX', name: 'Qwen3-4B (HF)', provider: ModelProvider.HuggingFace },
+    { id: 'onnx-community/Qwen3-1.7B-ONNX', name: 'Qwen3-1.7B (HF)', provider: ModelProvider.HuggingFace },
 
     // Local models via Ollama (recommended for hackathon)
     { id: 'gemma3n:e4b', name: 'Gemma 3N E4B (Ollama)', provider: ModelProvider.Ollama },
@@ -28,6 +46,12 @@ export const SUPPORTED_MODELS: ModelDefinition[] = [
     
     // Google AI Models (requires API_KEY)
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Google AI)', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.5-flash-preview-04-17', name: 'Gemini 2.5 Flash 04-17 (Google AI)', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'Gemini 2.5 Flash-Lite 06-17 (Google AI)', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Google AI)', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite (Google AI)', provider: ModelProvider.GoogleAI },
+    { id: 'gemma-3n-e4b-it', name: 'Gemma 3N E4B (Google AI)', provider: ModelProvider.GoogleAI },
+    { id: 'gemma-3n-e2b-it', name: 'Gemma 3N E2B (Google AI)', provider: ModelProvider.GoogleAI },
 ];
 
 

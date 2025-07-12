@@ -41,35 +41,72 @@ const callOllamaAPI = async (modelId: string, systemInstruction: string, userPro
     }
 }
 
-const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: string): { systemInstruction: string, userPrompt: string, responseSchema?: any } => {
+const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: string, provider?: ModelProvider): { systemInstruction: string; userPrompt: string; responseSchema?: any } => {
     const jsonOutputInstruction = "You MUST output your findings as a single, valid JSON object and NOTHING ELSE. Do not include any explanatory text, markdown formatting, or any other characters outside of the main JSON object.";
     
     const contextPreamble = searchContext 
         ? `Based *only* on the following web search results, fulfill the user's request.\n\n<SEARCH_RESULTS>\n${searchContext}\n</SEARCH_RESULTS>\n\n`
         : '';
 
+    const isLocalModel = provider === ModelProvider.Ollama || provider === ModelProvider.HuggingFace;
+
     switch (agentType) {
-        case AgentType.GeneAnalyst:
+        case AgentType.GeneAnalyst: {
+            let userPrompt = `${contextPreamble}For the research topic "${query}", identify the top 5 most relevant genes discussed in the provided text. Respond with a JSON object with a single key 'genes'. This key should contain an array of objects, where each object has "symbol" (string), "name" (string), and "summary" (string).`;
+            if (isLocalModel) {
+                userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "genes": [\n    {\n      "symbol": "FOXO3",\n      "name": "Forkhead box protein O3",\n      "summary": "A transcription factor involved in stress resistance and longevity."\n    }\n  ]\n}`;
+            }
             return {
                 systemInstruction: `You are an AI agent specializing in bioinformatics (OpenGenes AI). Your task is to extract genes related to a query. ${jsonOutputInstruction}`,
-                userPrompt: `${contextPreamble}For the research topic "${query}", identify the top 5 most relevant genes discussed in the provided text. Respond with a JSON object with a single key 'genes'. This key should contain an array of objects, where each object has "symbol" (string), "name" (string), and "summary" (string).`,
+                userPrompt: userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: { genes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { symbol: { type: Type.STRING }, name: { type: Type.STRING }, summary: { type: Type.STRING } } } } }
                 }
             };
-        case AgentType.CompoundAnalyst:
+        }
+        case AgentType.CompoundAnalyst: {
+            let userPrompt = `${contextPreamble}For the research topic "${query}", find the top 5 compounds mentioned in the provided text. Respond with a JSON object with a single key 'compounds'. This key should contain an array of objects, where each object has "name" (string), "mechanism" (string), and "source" (string, e.g., patent number or publication).`;
+             if (isLocalModel) {
+                userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "compounds": [\n    {\n      "name": "Metformin",\n      "mechanism": "Improves insulin sensitivity and mitochondrial function.",\n      "source": "Various studies"\n    }\n  ]\n}`;
+            }
             return {
                 systemInstruction: `You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract compounds related to a query. ${jsonOutputInstruction}`,
-                userPrompt: `${contextPreamble}For the research topic "${query}", find the top 5 compounds mentioned in the provided text. Respond with a JSON object with a single key 'compounds'. This key should contain an array of objects, where each object has "name" (string), "mechanism" (string), and "source" (string, e.g., patent number or publication).`,
+                userPrompt: userPrompt,
                 responseSchema: {
                      type: Type.OBJECT, properties: { compounds: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, mechanism: { type: Type.STRING }, source: { type: Type.STRING } } } } }
                 }
             };
+        }
         case AgentType.KnowledgeNavigator:
         default: {
-            const userPrompt = `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
+            let userPrompt = `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
 - "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present). If no relevant articles are found in the search results, this MUST be an empty array.
 - "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}) derived from the content.`;
+            
+            if (isLocalModel) {
+                const jsonStructureExample = `
+
+Your response MUST follow this exact JSON structure:
+{
+  "articles": [
+    {
+      "title": "Title of Article 1",
+      "summary": "A concise summary of the article's key findings from the provided text.",
+      "authors": "Author A, Author B, et al."
+    }
+  ],
+  "knowledgeGraph": {
+    "nodes": [
+      { "id": "concept_1", "label": "Concept 1", "type": "Gene" },
+      { "id": "concept_2", "label": "Concept 2", "type": "Disease" }
+    ],
+    "edges": [
+      { "source": "concept_1", "target": "concept_2", "label": "is associated with" }
+    ]
+  }
+}`;
+                userPrompt += jsonStructureExample;
+            }
 
             return {
                 systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a knowledge graph from the provided text. ${jsonOutputInstruction}`,
@@ -173,24 +210,21 @@ export const dispatchAgent = async (
             addLog(`[Search] Google AI model detected. Skipping local search, will use Google Search grounding.`);
         }
         
-        let { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, searchContext);
+        const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, searchContext, model.provider);
 
+        let finalSystemInstruction = systemInstruction;
         if (!isGoogleModel && !searchContext) {
             const antiHallucinationPrompt = `\n\nIMPORTANT INSTRUCTION: You have been provided with NO web search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, articles, search results, or web links. For the "articles" field in your JSON response, you MUST return an empty array.`;
-            systemInstruction += antiHallucinationPrompt;
+            finalSystemInstruction += antiHallucinationPrompt;
             addLog(`[dispatchAgent] Added anti-hallucination instructions for local model due to empty search results.`);
         }
 
         if (model.provider === ModelProvider.HuggingFace) {
-            jsonText = await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog, setProgress);
+            jsonText = await generateTextWithHuggingFace(model.id, finalSystemInstruction, userPrompt, quantization, device, addLog, setProgress);
 
-            // Strategy: Find the last valid-looking JSON object in the model's output.
-            // This is more robust against models that add conversational text or "think" blocks.
-            // The regex finds all substrings that start with { and end with }
             const jsonBlocks = jsonText.match(/(\{[\s\S]*?\})/g);
 
             if (jsonBlocks && jsonBlocks.length > 0) {
-                // Take the last match as it's the most likely to be the final answer.
                 jsonText = jsonBlocks[jsonBlocks.length - 1];
                 addLog(`[HuggingFace] Extracted the last potential JSON block from the response.`);
             } else {
@@ -199,7 +233,7 @@ export const dispatchAgent = async (
         
         } else if (model.provider === ModelProvider.Ollama) {
             if (setProgress) setProgress('Querying local Ollama model...');
-            jsonText = await callOllamaAPI(model.id, systemInstruction, userPrompt, true, addLog);
+            jsonText = await callOllamaAPI(model.id, finalSystemInstruction, userPrompt, true, addLog);
 
         } else { // Google AI provider
             addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
@@ -211,14 +245,12 @@ export const dispatchAgent = async (
             }
             const ai = new GoogleGenAI({ apiKey: key });
             
-            const googlePrompts = buildAgentPrompts(query, agentType);
-            
             addLog(`[GoogleAI] Calling model '${model.id}'...`);
             const response = await ai.models.generateContent({
                 model: model.id,
-                contents: googlePrompts.userPrompt,
+                contents: userPrompt,
                 config: {
-                    systemInstruction: googlePrompts.systemInstruction,
+                    systemInstruction: finalSystemInstruction,
                     tools: [{ googleSearch: {} }],
                 },
             });
