@@ -233,18 +233,39 @@ export const dispatchAgent = async (
         if (model.provider === ModelProvider.HuggingFace) {
             jsonText = await generateTextWithHuggingFace(model.id, finalSystemInstruction, userPrompt, quantization, device, addLog, setProgress);
 
-            const jsonBlocks = jsonText.match(/(\{[\s\S]*?\})/g);
-
-            if (jsonBlocks && jsonBlocks.length > 0) {
-                jsonText = jsonBlocks[jsonBlocks.length - 1];
-                addLog(`[HuggingFace] Extracted the last potential JSON block from the response.`);
+            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+                jsonText = jsonMatch[1];
+                 addLog('[HuggingFace] Extracted JSON from markdown code block.');
             } else {
-                 addLog(`[HuggingFace] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
+                const firstBrace = jsonText.indexOf('{');
+                const lastBrace = jsonText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace > firstBrace) {
+                    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+                    addLog('[HuggingFace] Extracted JSON by finding curly braces.');
+                } else {
+                     addLog(`[HuggingFace] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
+                }
             }
         
         } else if (model.provider === ModelProvider.Ollama) {
             if (setProgress) setProgress('Querying local Ollama model...');
             jsonText = await callOllamaAPI(model.id, finalSystemInstruction, userPrompt, true, addLog);
+            
+            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+                jsonText = jsonMatch[1];
+                 addLog('[Ollama] Extracted JSON from markdown code block.');
+            } else {
+                const firstBrace = jsonText.indexOf('{');
+                const lastBrace = jsonText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace > firstBrace) {
+                    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+                    addLog('[Ollama] Extracted JSON by finding curly braces.');
+                } else {
+                     addLog(`[Ollama] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
+                }
+            }
 
         } else { // Google AI provider
             addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
