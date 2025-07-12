@@ -1,5 +1,3 @@
-
-
 import { pipeline, type TextGenerationPipeline, type Chat } from '@huggingface/transformers';
 import type { HuggingFaceDevice } from '../types';
 
@@ -133,7 +131,7 @@ export const generateTextWithHuggingFace = async (
             return_full_text: false, 
         }) as Array<{ generated_text: string }>;
 
-        const finalText = output[0]?.generated_text?.trim() ?? '';
+        let finalText = output[0]?.generated_text?.trim() ?? '';
 
         if (!finalText) {
             addLog(`[HuggingFace v3] WARN: Model returned an empty or invalid response.`);
@@ -142,6 +140,15 @@ export const generateTextWithHuggingFace = async (
         }
         
         addLog(`[HuggingFace v3] Text generation successful. Raw length: ${finalText.length}`);
+        
+        // Remove <think>...</think> blocks that some models (like Qwen) might output.
+        const thinkTagRegex = /<think>[\s\S]*?<\/think>/gi;
+        if (thinkTagRegex.test(finalText)) {
+            const originalLength = finalText.length;
+            finalText = finalText.replace(thinkTagRegex, '').trim();
+            addLog(`[HuggingFace v3] Removed <think> tags from the response. New length: ${finalText.length} (was ${originalLength})`);
+        }
+        
         return finalText;
 
     } catch (error) {
