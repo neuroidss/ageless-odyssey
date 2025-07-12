@@ -32,8 +32,19 @@ const callOllamaAPI = async (modelId: string, systemInstruction: string, userPro
         }
 
         const data = await response.json();
-        addLog(`[Ollama] Successfully received response from model '${modelId}'.`);
-        return data.response; 
+        addLog(`[Ollama] Successfully received response from model '${modelId}'. Raw length: ${data.response?.length || 0}`);
+        
+        let cleanedResponse = data.response || '';
+
+        // Remove <think>...</think> blocks that some models (like Qwen) might output.
+        const thinkTagRegex = /<think>[\s\S]*?<\/think>/gi;
+        if (thinkTagRegex.test(cleanedResponse)) {
+            const originalLength = cleanedResponse.length;
+            cleanedResponse = cleanedResponse.replace(thinkTagRegex, '').trim();
+            addLog(`[Ollama] Removed <think> tags from the response. New length: ${cleanedResponse.length} (was ${originalLength})`);
+        }
+        
+        return cleanedResponse;
 
     } catch (error) {
         addLog(`[Ollama] ERROR: Failed to connect to Ollama server. ${error}`);
