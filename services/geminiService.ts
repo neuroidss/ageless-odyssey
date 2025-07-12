@@ -1,14 +1,10 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, type ModelDefinition, ModelProvider, AgentType } from '../types';
+import { type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice } from '../types';
 import { searchDuckDuckGo, type SearchResult } from './searchService';
 import { generateTextWithHuggingFace } from './huggingFaceService';
 
-if (!process.env.API_KEY) {
-    console.warn("API_KEY environment variable not set. Google AI models will not work.");
-}
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const OLLAMA_BASE_URL = 'http://localhost:11434/api/generate';
 
 const callOllamaAPI = async (modelId: string, systemInstruction: string, userPrompt: string, isJson: boolean = false, addLog: (msg: string) => void): Promise<string> => {
@@ -70,12 +66,14 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
                 }
             };
         case AgentType.KnowledgeNavigator:
-        default:
+        default: {
+            const userPrompt = `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
+- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present). If no relevant articles are found in the search results, this MUST be an empty array.
+- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}) derived from the content.`;
+
             return {
                 systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a knowledge graph from the provided text. ${jsonOutputInstruction}`,
-                userPrompt: `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
-- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present).
-- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}) derived from the content.`,
+                userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: {
                         articles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, summary: { type: Type.STRING }, authors: { type: Type.STRING } } } },
@@ -88,6 +86,7 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
                     }
                 }
             };
+        }
     }
 };
 
@@ -135,71 +134,87 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
 };
 
 
-export const dispatchAgent = async (query: string, agentType: AgentType, model: ModelDefinition, addLog: (msg: string) => void): Promise<AgentResponse> => {
+export const dispatchAgent = async (
+    query: string, 
+    agentType: AgentType, 
+    model: ModelDefinition, 
+    quantization: string,
+    addLog: (msg: string) => void, 
+    apiKey?: string,
+    device: HuggingFaceDevice = 'wasm',
+): Promise<AgentResponse> => {
     
+    addLog(`[dispatchAgent] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${query}"`);
+
     try {
         let jsonText: string;
         let uniqueSources: GroundingSource[] = [];
+        let searchContext = '';
+
+        const isGoogleModel = model.provider === ModelProvider.GoogleAI;
+
+        if (!isGoogleModel) {
+            addLog(`[Search] Local model detected (${model.provider}). Initiating web search for context...`);
+            try {
+                const searchResults = await searchDuckDuckGo(query, addLog);
+                if (searchResults.length > 0) {
+                    searchContext = searchResults.map((r, i) => `[CONTEXT ${i+1}]\nURL: ${r.link}\nTITLE: ${r.title}\nCONTENT: ${r.snippet}`).join('\n\n');
+                    uniqueSources = searchResults.map(r => ({ uri: r.link, title: r.title }));
+                    addLog(`[Search] Web search successful. Provided ${searchResults.length} results to the model as context.`);
+                } else {
+                    addLog(`[Search] WARN: Web search returned no results. The model will use its internal knowledge only.`);
+                }
+            } catch (searchError) {
+                addLog(`[Search] ERROR: Web search failed. Proceeding without search context. Error: ${searchError}`);
+            }
+        } else {
+            addLog(`[Search] Google AI model detected. Skipping local search, will use Google Search grounding.`);
+        }
+        
+        let { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, searchContext);
+
+        if (!isGoogleModel && !searchContext) {
+            const antiHallucinationPrompt = `\n\nIMPORTANT INSTRUCTION: You have been provided with NO web search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, articles, search results, or web links. For the "articles" field in your JSON response, you MUST return an empty array.`;
+            systemInstruction += antiHallucinationPrompt;
+            addLog(`[dispatchAgent] Added anti-hallucination instructions for local model due to empty search results.`);
+        }
 
         if (model.provider === ModelProvider.HuggingFace) {
-            addLog(`[HuggingFace] Using in-browser model. Web search is not applicable.`);
-            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType);
+            jsonText = await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog);
 
-            jsonText = await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, addLog);
+            // Strategy: Find the last valid-looking JSON object in the model's output.
+            // This is more robust against models that add conversational text or "think" blocks.
+            // The regex finds all substrings that start with { and end with }
+            const jsonBlocks = jsonText.match(/(\{[\s\S]*?\})/g);
 
-            // Hugging Face models often wrap JSON in markdown or have trailing text.
-            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                jsonText = jsonMatch[1];
-                addLog('[HuggingFace] Extracted JSON from markdown code block.');
+            if (jsonBlocks && jsonBlocks.length > 0) {
+                // Take the last match as it's the most likely to be the final answer.
+                jsonText = jsonBlocks[jsonBlocks.length - 1];
+                addLog(`[HuggingFace] Extracted the last potential JSON block from the response.`);
             } else {
-                const firstBrace = jsonText.indexOf('{');
-                const lastBrace = jsonText.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
-                    addLog('[HuggingFace] Extracted JSON by finding curly braces.');
-                } else {
-                    addLog(`[HuggingFace] WARN: Could not extract structured JSON from response, using raw text. This may cause parsing errors.`);
-                    jsonText = jsonText; // Use raw text as a fallback
-                }
+                 addLog(`[HuggingFace] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
             }
-            uniqueSources = []; // No external sources for in-browser models
         
         } else if (model.provider === ModelProvider.Ollama) {
-            addLog(`[Ollama] Using local model. Attempting web search for context...`);
-            const searchResults: SearchResult[] = await searchDuckDuckGo(query, addLog);
-            
-            const searchContext = searchResults.length > 0 
-                ? searchResults.map((r, i) => `[CONTEXT ${i+1}]\nURL: ${r.link}\nTITLE: ${r.title}\nCONTENT: ${r.snippet}`).join('\n\n')
-                : '';
-            
-            let { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, searchContext);
-
-            if (!searchContext) {
-                addLog('[Ollama] WARN: Web search returned no results or failed. The model will use internal knowledge only.');
-                systemInstruction += "\n\nIMPORTANT INSTRUCTION: You have been provided with NO web search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, figures, sources, or web links. If you do not know the answer, say so.";
-            } else {
-                addLog(`[Ollama] Web search successful. Providing ${searchResults.length} results to the model as context.`);
-            }
-            
             jsonText = await callOllamaAPI(model.id, systemInstruction, userPrompt, true, addLog);
-            uniqueSources = searchResults.map(r => ({ uri: r.link, title: r.title }));
 
         } else { // Google AI provider
             addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
-            if (!process.env.API_KEY) {
+            const key = apiKey || process.env.API_KEY;
+            if (!key) {
                 addLog(`[GoogleAI] ERROR: API_KEY is not set.`);
-                throw new Error("API_KEY is not set. Please set it to use Google AI models.");
+                throw new Error("API Key for Google AI is not provided. Please enter your key in the control panel.");
             }
+            const ai = new GoogleGenAI({ apiKey: key });
             
-            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType);
+            const googlePrompts = buildAgentPrompts(query, agentType);
             
             addLog(`[GoogleAI] Calling model '${model.id}'...`);
             const response = await ai.models.generateContent({
                 model: model.id,
-                contents: userPrompt,
+                contents: googlePrompts.userPrompt,
                 config: {
-                    systemInstruction,
+                    systemInstruction: googlePrompts.systemInstruction,
                     tools: [{ googleSearch: {} }],
                 },
             });
@@ -239,7 +254,7 @@ export const dispatchAgent = async (query: string, agentType: AgentType, model: 
         }
 
         const agentResponse = parseAgentResponse(jsonText, agentType, addLog);
-        agentResponse.sources = uniqueSources;
+        agentResponse.sources = [...(agentResponse.sources || []), ...uniqueSources];
         return agentResponse;
 
     } catch (error) {
@@ -250,7 +265,15 @@ export const dispatchAgent = async (query: string, agentType: AgentType, model: 
     }
 };
 
-export const synthesizeFindings = async (query: string, items: WorkspaceItem[], model: ModelDefinition, addLog: (msg: string) => void): Promise<string> => {
+export const synthesizeFindings = async (
+    query: string, 
+    items: WorkspaceItem[], 
+    model: ModelDefinition, 
+    quantization: string,
+    addLog: (msg: string) => void, 
+    apiKey?: string,
+    device: HuggingFaceDevice = 'wasm'
+): Promise<string> => {
     const resultsText = items.map(i => `Type: ${i.type}\nTitle: ${i.title}\nSummary: ${i.summary}`).join('\n---\n');
     addLog(`[Synthesize] Starting synthesis for "${query}" with ${items.length} items using model ${model.id}.`);
     const systemInstruction = `You are a world-class bioinformatics and longevity research scientist. Your task is to analyze a collection of data (articles, genes, compounds) and provide a high-level synthesis and a novel hypothesis. The output must be well-structured, clear, and scientifically plausible. Use Markdown for formatting: use **bold** for headings and use bullet points for lists (e.g., '* item').`;
@@ -258,7 +281,7 @@ export const synthesizeFindings = async (query: string, items: WorkspaceItem[], 
 
     try {
         if (model.provider === ModelProvider.HuggingFace) {
-            return await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, addLog);
+            return await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog);
         }
 
         if (model.provider === ModelProvider.Ollama) {
@@ -266,7 +289,12 @@ export const synthesizeFindings = async (query: string, items: WorkspaceItem[], 
         }
         
         addLog(`[Synthesize] Calling Google AI model '${model.id}'.`);
-        if (!process.env.API_KEY) throw new Error("API_KEY is not set. Please set it to use Google AI models.");
+        const key = apiKey || process.env.API_KEY;
+        if (!key) {
+            throw new Error("API Key for Google AI is not provided. Please enter your key in the control panel.");
+        }
+        const ai = new GoogleGenAI({ apiKey: key });
+
         const response = await ai.models.generateContent({
             model: model.id,
             contents: userPrompt,

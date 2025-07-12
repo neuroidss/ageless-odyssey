@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS } from './constants';
@@ -31,6 +31,9 @@ const getInitialGamificationState = (): GamificationState => {
 const App: React.FC = () => {
   const [topic, setTopic] = useState<string>('');
   const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS[0]);
+  const [quantization, setQuantization] = useState<string>(SUPPORTED_MODELS[0].quantizations?.[0] ?? 'q4');
+  const [device, setDevice] = useState<HuggingFaceDevice>('wasm');
+  
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -42,7 +45,7 @@ const App: React.FC = () => {
 
   const [trajectoryState, setTrajectoryState] = useState<TrajectoryState | null>(null);
 
-  // Gamification states
+  const [apiKey, setApiKey] = useState<string>('');
   const [gamification, setGamification] = useState<GamificationState>(getInitialGamificationState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
@@ -55,6 +58,28 @@ const App: React.FC = () => {
       console.log(finalMessage);
       setDebugLog(prev => [finalMessage, ...prev].slice(0, 100));
   }, []);
+
+  useEffect(() => {
+    const savedKey = sessionStorage.getItem('google-api-key');
+    if (savedKey) {
+        setApiKey(savedKey);
+        addLog("Loaded Google AI API Key from session storage.");
+    }
+  }, [addLog]);
+
+  const handleApiKeyChange = (key: string) => {
+      setApiKey(key);
+      sessionStorage.setItem('google-api-key', key);
+      addLog("Google AI API Key has been updated for this session.");
+  };
+
+  const handleModelChange = (newModel: ModelDefinition) => {
+    setModel(newModel);
+    if (newModel.provider === ModelProvider.HuggingFace && newModel.quantizations) {
+        setQuantization(newModel.quantizations[0]);
+        addLog(`Switched to Hugging Face model. Default quantization set to '${newModel.quantizations[0]}'.`);
+    }
+  };
 
   // --- Ascension Framework Logic ---
   const updateAscensionState = useCallback((action: string, payload?: any) => {
@@ -151,9 +176,14 @@ const App: React.FC = () => {
   }, [trajectoryState, updateAscensionState]);
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
-    if (!topic.trim()) return;
+    addLog(`[handleDispatchAgent] Triggered for agent: ${agentType}`);
+    if (!topic.trim()) {
+        addLog(`[handleDispatchAgent] Aborted: topic is empty or whitespace.`);
+        return;
+    }
+    
+    addLog(`[handleDispatchAgent] Processing topic: "${topic}"`);
 
-    addLog(`Dispatching agent "${agentType}" for topic: "${topic}"`);
     updateAscensionState('DISPATCH_AGENT');
     setIsLoading(true);
     setError(null);
@@ -168,7 +198,7 @@ const App: React.FC = () => {
     };
 
     try {
-      const response = await dispatchAgent(topic, agentType, model, addLog);
+      const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device);
       addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
       
       setWorkspace(prev => {
@@ -217,19 +247,19 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [topic, model, hasSearched, workspace, updateAscensionState, addLog]);
+  }, [topic, model, quantization, device, apiKey, hasSearched, workspace, updateAscensionState, addLog]);
 
   const handleSynthesize = useCallback(async () => {
     if (!workspace?.items || workspace.items.length === 0) return;
 
-    addLog('Synthesizing findings...');
+    addLog(`Synthesizing findings for "${workspace.topic}"...`);
     updateAscensionState('SYNTHESIZE');
     setIsSynthesizing(true);
     setSynthesisError(null);
     setWorkspace(prev => prev ? {...prev, synthesis: null} : null);
 
     try {
-      const response = await synthesizeFindings(workspace.topic, workspace.items, model, addLog);
+      const response = await synthesizeFindings(workspace.topic, workspace.items, model, quantization, addLog, apiKey, device);
       addLog('Synthesis complete.');
       setWorkspace(prev => prev ? {...prev, synthesis: response} : null);
     } catch (e) {
@@ -243,7 +273,7 @@ const App: React.FC = () => {
     } finally {
       setIsSynthesizing(false);
     }
-  }, [workspace, model, updateAscensionState, addLog]);
+  }, [workspace, model, quantization, device, updateAscensionState, addLog, apiKey]);
   
     const handleTopicChange = (newTopic: string) => {
         setTopic(newTopic);
@@ -282,7 +312,13 @@ const App: React.FC = () => {
           onDispatchAgent={handleDispatchAgent}
           isLoading={isLoading}
           model={model}
-          setModel={setModel}
+          setModel={handleModelChange}
+          apiKey={apiKey}
+          onApiKeyChange={handleApiKeyChange}
+          quantization={quantization}
+          setQuantization={setQuantization}
+          device={device}
+          setDevice={setDevice}
         />
         <div className="mt-4">
           <WorkspaceView

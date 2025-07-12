@@ -1,5 +1,9 @@
 
+
+
+
 import { pipeline, type TextGenerationPipeline, type Chat } from '@huggingface/transformers';
+import type { HuggingFaceDevice } from '../types';
 
 /**
  * Manages the singleton instance of a Hugging Face text-generation pipeline.
@@ -8,35 +12,40 @@ import { pipeline, type TextGenerationPipeline, type Chat } from '@huggingface/t
 class HuggingFacePipelineManager {
     static task: 'text-generation' = 'text-generation';
     static modelId: string | null = null;
+    static quantization: string | null = null;
+    static device: HuggingFaceDevice | null = null;
     static instance: TextGenerationPipeline | null = null;
 
     /**
-     * Gets the singleton pipeline instance. If the model ID changes,
+     * Gets the singleton pipeline instance. If the model ID, quantization, or device changes,
      * it disposes of the old pipeline and creates a new one.
      * @param modelId The Hugging Face model ID.
+     * @param quantization The model quantization type (e.g., 'q4', 'int8').
+     * @param device The target device ('wasm' for CPU, 'webgpu' for GPU).
      * @param addLog A function to log progress.
      * @returns A promise that resolves to the text generation pipeline.
      */
-    static async getInstance(modelId: string, addLog: (msg: string) => void): Promise<TextGenerationPipeline> {
-        if (this.modelId !== modelId || this.instance === null) {
+    static async getInstance(modelId: string, quantization: string, device: HuggingFaceDevice, addLog: (msg: string) => void): Promise<TextGenerationPipeline> {
+        if (this.modelId !== modelId || this.quantization !== quantization || this.device !== device || !this.instance) {
             if (this.instance) {
-                addLog('[HuggingFace v3] Disposing old model pipeline...');
+                addLog(`[HuggingFace v3] Disposing old model pipeline...`);
                 await this.instance.dispose();
+                this.instance = null;
             }
             
             this.modelId = modelId;
-            // Forcing WASM backend to prevent WebGPU crashes on certain browser/driver versions.
-            // This ensures stability at the cost of some performance.
-            addLog(`[HuggingFace v3] Loading model pipeline for '${modelId}' using WASM (CPU) backend for stability.`);
+            this.quantization = quantization;
+            this.device = device;
             
-            // Explicitly type pipeline options to prevent TypeScript from generating a union type that is too complex.
+            addLog(`[HuggingFace v3] Loading model pipeline for '${modelId}' using ${device.toUpperCase()} backend with quantization '${quantization}'.`);
+            
             const pipelineOptions: {
-                device: string;
+                device: HuggingFaceDevice;
                 dtype: string;
                 progress_callback: (progress: any) => void;
             } = {
-                device: 'wasm',    // Force CPU execution via WebAssembly to prevent WebGPU errors.
-                dtype: 'q4',       // Use a compatible quantization for CPU.
+                device: device,
+                dtype: quantization,
                 progress_callback: (progress: any) => {
                     if (progress.status === 'progress') {
                         const percentage = (progress.progress).toFixed(2);
@@ -49,10 +58,17 @@ class HuggingFacePipelineManager {
                 }
             };
             
-            this.instance = await pipeline(this.task, this.modelId, pipelineOptions) as TextGenerationPipeline;
+            const createTextGenerationPipeline = pipeline as (
+                task: 'text-generation',
+                model: string,
+                options: any,
+            ) => Promise<TextGenerationPipeline>;
+
+            this.instance = await createTextGenerationPipeline(this.task, modelId, pipelineOptions);
+            
             addLog(`[HuggingFace v3] Model '${modelId}' is fully loaded and ready.`);
         }
-        return this.instance;
+        return this.instance!;
     }
 }
 
@@ -62,6 +78,8 @@ class HuggingFacePipelineManager {
  * @param modelId The ID of the model to use (e.g., 'onnx-community/gemma-3n-E2B-it-ONNX').
  * @param systemInstruction The system prompt for the model.
  * @param userPrompt The user's prompt.
+ * @param quantization The model quantization type (e.g., 'q4', 'int8').
+ * @param device The target device ('wasm' for CPU, 'webgpu' for GPU).
  * @param addLog A function to log messages for debugging.
  * @returns A promise that resolves to the generated text.
  */
@@ -69,11 +87,13 @@ export const generateTextWithHuggingFace = async (
     modelId: string, 
     systemInstruction: string,
     userPrompt: string, 
+    quantization: string,
+    device: HuggingFaceDevice,
     addLog: (msg: string) => void
 ): Promise<string> => {
     
     try {
-        const generator = await HuggingFacePipelineManager.getInstance(modelId, addLog);
+        const generator = await HuggingFacePipelineManager.getInstance(modelId, quantization, device, addLog);
         addLog(`[HuggingFace v3] Applying chat template for '${modelId}'...`);
 
         const messages: Chat = [

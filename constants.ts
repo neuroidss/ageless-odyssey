@@ -1,4 +1,5 @@
 
+
 import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention } from './types';
 
 export const EXAMPLE_TOPICS = [
@@ -11,10 +12,10 @@ export const EXAMPLE_TOPICS = [
 ];
 export const SUPPORTED_MODELS: ModelDefinition[] = [
     // Hugging Face Transformers.js (runs in-browser)
-    { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B (Hugging Face)', provider: ModelProvider.HuggingFace },
-    { id: 'onnx-community/gemma-3n-E2B-it-ONNX', name: 'Gemma 3N E2B (Hugging Face)', provider: ModelProvider.HuggingFace },
-    { id: 'onnx-community/Qwen3-4B-ONNX', name: 'Qwen3-4B (Hugging Face)', provider: ModelProvider.HuggingFace },
-    { id: 'onnx-community/Qwen3-1.7B-ONNX', name: 'Qwen3-1.7B (Hugging Face)', provider: ModelProvider.HuggingFace },
+    { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
+    { id: 'onnx-community/gemma-3n-E2B-it-ONNX', name: 'Gemma 3N E2B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
+    { id: 'onnx-community/Qwen3-4B-ONNX', name: 'Qwen3-4B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
+    { id: 'onnx-community/Qwen3-1.7B-ONNX', name: 'Qwen3-1.7B (HF)', provider: ModelProvider.HuggingFace, quantizations: ['q4', 'int8'] },
 
     // Local models via Ollama (recommended for hackathon)
     { id: 'gemma3n:e4b', name: 'Gemma 3N E4B (Ollama)', provider: ModelProvider.Ollama },
