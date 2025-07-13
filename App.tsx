@@ -406,10 +406,6 @@ const App: React.FC = () => {
           />
         </div>
       </main>
-      <footer className="text-center py-6 mt-12 text-slate-500 text-sm">
-        <p>Built for the For Immortality AI Hackathon.</p>
-        <p>&copy; 2024 Longevity Analyst Workbench. All data is for informational purposes only.</p>
-      </footer>
       <DebugLogView logs={debugLog} onReset={handleResetState} />
     </div>
   );
