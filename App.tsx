@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
@@ -269,16 +270,53 @@ const App: React.FC = () => {
 
       try {
         const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device);
-        addLog(`[Autonomous] Agent finished. Found ${response.items.length} new trends.`);
+        addLog(`[Autonomous] Agent finished. Found ${response.items.length} new items.`);
         
-        response.items.forEach(item => {
-            if (item.type === 'trend' && item.trendData) {
-                updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
-            }
-        });
+        if (response.items.length > 0) {
+            setHasSearched(prev => prev ? prev : true);
 
-        mergeAgentResponse(response);
-        setAgentCallsMade(prev => prev + 1);
+            setWorkspace(prev => {
+                if (!prev) {
+                    // If workspace is empty, initialize it.
+                    return {
+                        topic: AUTONOMOUS_AGENT_QUERY,
+                        items: response.items || [],
+                        sources: response.sources || [],
+                        knowledgeGraph: response.knowledgeGraph || { nodes: [], edges: [] },
+                        synthesis: null
+                    };
+                }
+                // If workspace exists, merge into it.
+                const newItems = response.items.filter((newItem: any) => !prev.items.some(existing => existing.id === newItem.id));
+                const newSources = response.sources?.filter((newSrc: any) => !prev.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
+                
+                let newGraph = prev.knowledgeGraph;
+                if (response.knowledgeGraph) {
+                    const existingNodeIds = new Set(prev.knowledgeGraph?.nodes.map(n => n.id) || []);
+                    const newNodes = response.knowledgeGraph.nodes.filter((n: any) => !existingNodeIds.has(n.id));
+                    const existingEdgeIds = new Set(prev.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
+                    const newEdges = response.knowledgeGraph.edges.filter((e: any) => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
+                    newGraph = {
+                        nodes: [...(prev.knowledgeGraph?.nodes || []), ...newNodes],
+                        edges: [...(prev.knowledgeGraph?.edges || []), ...newEdges],
+                    };
+                }
+                
+                return {
+                    ...prev,
+                    items: [...prev.items, ...newItems],
+                    sources: [...prev.sources, ...newSources],
+                    knowledgeGraph: newGraph,
+                };
+            });
+
+            response.items.forEach(item => {
+                if (item.type === 'trend' && item.trendData) {
+                    updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
+                }
+            });
+            setAgentCallsMade(prev => prev + 1);
+        }
 
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
@@ -297,7 +335,7 @@ const App: React.FC = () => {
         addLog("[Autonomous] Mode deactivated. Interval cleared.");
       }
     };
-  }, [isAutonomousMode, agentBudget, agentCallsMade, model, quantization, apiKey, device, addLog, mergeAgentResponse, updateAscensionState]);
+  }, [isAutonomousMode, agentBudget, agentCallsMade, model, quantization, apiKey, device, addLog, updateAscensionState]);
 
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {

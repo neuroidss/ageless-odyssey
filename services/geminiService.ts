@@ -64,12 +64,10 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
     switch (agentType) {
         case AgentType.TrendSpotter: {
             const userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3-5 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
-    
-- Novelty: How new and non-obvious is this trend? (0=well-established, 100=brand new paradigm).
-- Velocity: How quickly is this trend gaining traction and being published on? (0=stagnant, 100=exponential growth).
-- Impact: How radically could this trend change the field of longevity if successful? (0=incremental, 100=paradigm-shifting, solves a major hallmark).
 
-Your response MUST be a JSON object with a single key 'trends', containing an array of trend objects.
+Also, construct a knowledge graph. This graph should contain a central 'Topic' node representing "${query}". For each trend you identify, create a 'Process' node (e.g. for "Targeting Glial-Specific Autophagy"). The 'id' for trend nodes should be a slug-cased version of the trend name. Connect each trend node to the central topic node with a "is a trend in" edge.
+
+Your response MUST be a JSON object with two top-level keys: "trends" and "knowledgeGraph".
 
 Example JSON structure:
 {
@@ -82,7 +80,16 @@ Example JSON structure:
       "velocity": 70,
       "impact": 90
     }
-  ]
+  ],
+  "knowledgeGraph": {
+    "nodes": [
+      { "id": "topic_${query.toLowerCase().replace(/\s+/g, '_')}", "label": "${query}", "type": "Topic" },
+      { "id": "targeting-glial-specific-autophagy", "label": "Targeting Glial-Specific Autophagy", "type": "Process" }
+    ],
+    "edges": [
+      { "source": "targeting-glial-specific-autophagy", "target": "topic_${query.toLowerCase().replace(/\s+/g, '_')}", "label": "is a trend in" }
+    ]
+  }
 }`;
 
             return {
@@ -100,6 +107,12 @@ Example JSON structure:
                                     velocity: { type: Type.NUMBER },
                                     impact: { type: Type.NUMBER },
                                 }
+                            }
+                        },
+                        knowledgeGraph: {
+                            type: Type.OBJECT, properties: {
+                                nodes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, label: { type: Type.STRING }, type: { type: Type.STRING } } } },
+                                edges: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source: { type: Type.STRING }, target: { type: Type.STRING }, label: { type: Type.STRING } } } }
                             }
                         }
                     }
@@ -207,6 +220,9 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
                             justification: t.justification,
                         }
                     }));
+                }
+                if (data.knowledgeGraph) {
+                    knowledgeGraph = data.knowledgeGraph;
                 }
                 break;
             case AgentType.GeneAnalyst:
