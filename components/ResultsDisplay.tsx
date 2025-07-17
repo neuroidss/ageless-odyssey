@@ -1,10 +1,11 @@
 
 
 import React from 'react';
-import { type WorkspaceState, type WorkspaceItem, KnowledgeGraphNode, TrajectoryState } from '../types';
+import { type WorkspaceState, type WorkspaceItem, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon } from './icons';
+import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon, NetworkIcon } from './icons';
 import TrajectoryView from './TrajectoryView';
+import KnowledgeGraphView from './KnowledgeGraphView';
 
 interface WorkspaceViewProps {
   workspace: WorkspaceState | null;
@@ -20,68 +21,6 @@ interface WorkspaceViewProps {
   isAutonomousMode: boolean;
   isAutonomousLoading: boolean;
 }
-
-const NodeChip: React.FC<{ node: KnowledgeGraphNode }> = ({ node }) => {
-    const getIcon = () => {
-        switch(node.type) {
-            case 'Gene': return <GeneIcon />;
-            case 'Protein': return <ProteinIcon />;
-            case 'Compound': return <CompoundIcon />;
-            case 'Pathway': return <PathwayIcon />;
-            case 'Disease': return <DiseaseIcon />;
-            default: return <div className="h-5 w-5" />;
-        }
-    };
-    const colors = {
-        Gene: 'bg-green-800/50 text-green-300 border-green-700',
-        Protein: 'bg-blue-800/50 text-blue-300 border-blue-700',
-        Compound: 'bg-yellow-800/50 text-yellow-300 border-yellow-700',
-        Pathway: 'bg-purple-800/50 text-purple-300 border-purple-700',
-        Disease: 'bg-red-800/50 text-red-300 border-red-700',
-        Process: 'bg-slate-700/50 text-slate-300 border-slate-600',
-    };
-    
-    const colorClass = colors[node.type] || colors['Process'];
-
-    return (
-        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${colorClass}`}>
-            {getIcon()}
-            {node.label}
-        </span>
-    );
-};
-
-
-const KnowledgeGraphDisplay: React.FC<{ graph: WorkspaceState['knowledgeGraph'] }> = ({ graph }) => {
-    if (!graph || graph.nodes.length === 0) return null;
-    
-    const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
-
-    return (
-        <div className="p-6 bg-slate-800/50 backdrop-blur-sm rounded-lg border border-slate-700">
-            <h4 className="text-2xl font-bold text-slate-100 mb-4 bg-clip-text text-transparent bg-gradient-to-r from-teal-300 to-blue-400">
-                Knowledge Graph
-            </h4>
-            <div className="space-y-3">
-                {graph.edges.map((edge, index) => {
-                    const sourceNode = nodeMap.get(edge.source);
-                    const targetNode = nodeMap.get(edge.target);
-                    if (!sourceNode || !targetNode) return null;
-
-                    return (
-                        <div key={index} className="flex items-center justify-center flex-wrap gap-2 p-3 bg-slate-900/40 rounded-lg">
-                            <NodeChip node={sourceNode} />
-                            <div className="font-mono text-teal-400 text-sm px-2 py-1 border-2 border-dashed border-slate-600 rounded-md">
-                                {edge.label}
-                            </div>
-                            <NodeChip node={targetNode} />
-                        </div>
-                    )
-                })}
-            </div>
-        </div>
-    );
-};
 
 const formatSynthesis = (text: string | null): string => {
     if (!text) return '';
@@ -213,7 +152,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
         </div>
       )}
 
-      {hasSearched && workspace && workspace.items.length > 0 && (
+      {hasSearched && workspace && (
         <>
           {/* Trend Items Section */}
            {trendItems.length > 0 && (
@@ -264,7 +203,29 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
               />
           )}
           
-          <KnowledgeGraphDisplay graph={workspace.knowledgeGraph ?? null} />
+          {/* Interactive Knowledge Graph Section */}
+          {workspace.knowledgeGraph && workspace.knowledgeGraph.nodes.length > 0 && (
+            <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
+                <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-4">
+                    <NetworkIcon className="h-8 w-8 text-teal-300" />
+                    <h2 className="text-2xl font-bold text-slate-100 text-center sm:text-left">
+                        Semantic Knowledge Web
+                    </h2>
+                </div>
+                <p className="text-slate-400 text-center sm:text-left mb-2">
+                    This interactive graph visualizes the conceptual relationships in your workspace, representing an embedding of the topic. Drag nodes to explore the network.
+                </p>
+                <div className="flex justify-center items-center gap-4 mb-4">
+                    <label htmlFor="time-lapse-slider" className="text-sm text-slate-400">Time-Lapse:</label>
+                    <input type="range" id="time-lapse-slider" disabled className="w-48" />
+                    <span className="text-xs text-slate-500 bg-slate-700 px-2 py-1 rounded">Coming Soon</span>
+                </div>
+                <div className="w-full h-[500px] bg-slate-800/40 rounded-lg overflow-hidden relative border border-slate-700">
+                     <KnowledgeGraphView graph={workspace.knowledgeGraph} />
+                </div>
+            </div>
+          )}
+
 
           {otherItems.length > 0 && (
             <div>

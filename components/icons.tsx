@@ -163,3 +163,17 @@ export const SingularityIcon = ({className = "h-7 w-7"}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-2.474m0 0L3.182 6.37l5.159 2.972m0 0 3.182-5.5L12 6.37m0 0 8.818 5.09-5.159-2.972M12 6.37l-5.159 2.972m0 0 3.182 5.5M12 12.63l-2.51-2.225L12 6.37l2.51 2.225L12 12.63Z" />
     </svg>
 );
+
+export const NetworkIcon = ({className = "h-8 w-8"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3.75H19.5M8.25 3.75A2.25 2.25 0 0 0 6 6v12a2.25 2.25 0 0 0 2.25 2.25h11.25" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3.75h11.25a2.25 2.25 0 0 1 2.25 2.25v12a2.25 2.25 0 0 1-2.25 2.25H6.375" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12h13.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12a2.25 2.25 0 0 1-2.25-2.25V6" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12a2.25 2.25 0 0 0-2.25 2.25v6" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12a2.25 2.25 0 0 1 2.25 2.25V18" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12a2.25 2.25 0 0 0 2.25-2.25V6" />
+        <circle cx="9" cy="9" r="1.5" fill="currentColor"/>
+        <circle cx="15" cy="15" r="1.5" fill="currentColor"/>
+    </svg>
+);

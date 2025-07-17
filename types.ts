@@ -54,8 +54,10 @@ export interface GroundingSource {
 export interface KnowledgeGraphNode {
     id: string;
     label: string;
-    type: 'Gene' | 'Protein' | 'Compound' | 'Pathway' | 'Disease' | 'Process';
+    type: 'Gene' | 'Protein' | 'Compound' | 'Pathway' | 'Disease' | 'Process' | 'Topic';
     status?: 'normal' | 'dysregulated' | 'intervention_target';
+    x?: number;
+    y?: number;
 }
 
 export interface KnowledgeGraphEdge {

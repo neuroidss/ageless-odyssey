@@ -135,8 +135,8 @@ Example JSON structure:
         case AgentType.KnowledgeNavigator:
         default: {
             let userPrompt = `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
-- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present). If no relevant articles are found in the search results, this MUST be an empty array.
-- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}) derived from the content.`;
+- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present). If no relevant articles are found, this MUST be an empty array.
+- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}). Create a rich, interconnected graph. Create a central node of type 'Topic' for the main query "${query}". Then, add nodes for key Genes, Compounds, and Processes found in the text. Connect these nodes to the central Topic node and to each other with descriptive labels (e.g., 'regulates', 'inhibits', 'implicated_in').`;
             
             if (isLocalModel) {
                 const jsonStructureExample = `
@@ -152,11 +152,13 @@ Your response MUST follow this exact JSON structure:
   ],
   "knowledgeGraph": {
     "nodes": [
-      { "id": "concept_1", "label": "Concept 1", "type": "Gene" },
-      { "id": "concept_2", "label": "Concept 2", "type": "Disease" }
+      { "id": "topic_query", "label": "The Query", "type": "Topic" },
+      { "id": "SIRT1", "label": "SIRT1", "type": "Gene" },
+      { "id": "Resveratrol", "label": "Resveratrol", "type": "Compound" }
     ],
     "edges": [
-      { "source": "concept_1", "target": "concept_2", "label": "is associated with" }
+      { "source": "Resveratrol", "target": "SIRT1", "label": "activates" },
+      { "source": "SIRT1", "target": "topic_query", "label": "related to" }
     ]
   }
 }`;
@@ -164,7 +166,7 @@ Your response MUST follow this exact JSON structure:
             }
 
             return {
-                systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a knowledge graph from the provided text. ${jsonOutputInstruction}`,
+                systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a rich, interconnected knowledge graph from the provided text. ${jsonOutputInstruction}`,
                 userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: {
