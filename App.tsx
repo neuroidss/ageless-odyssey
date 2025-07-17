@@ -1,10 +1,13 @@
 
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
-import { SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS, DEFAULT_HUGGING_FACE_DEVICE, DEFAULT_HUGGING_FACE_QUANTIZATION } from './constants';
+import { 
+    SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS, 
+    DEFAULT_HUGGING_FACE_DEVICE, DEFAULT_HUGGING_FACE_QUANTIZATION, 
+    AUTONOMOUS_AGENT_QUERY, DEFAULT_AGENT_BUDGET, AUTONOMOUS_INTERVAL_MS 
+} from './constants';
 import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
 import WorkspaceView from './components/ResultsDisplay';
@@ -33,7 +36,7 @@ const getInitialGamificationState = (): GamificationState => {
 
 const App: React.FC = () => {
   const [topic, setTopic] = useState<string>('');
-  const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS[0]);
+  const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS.find(m => m.id === 'gemini-2.5-flash') || SUPPORTED_MODELS[0]);
   const [quantization, setQuantization] = useState<string>(DEFAULT_HUGGING_FACE_QUANTIZATION);
   const [device, setDevice] = useState<HuggingFaceDevice>(DEFAULT_HUGGING_FACE_DEVICE);
   
@@ -53,6 +56,12 @@ const App: React.FC = () => {
   const [gamification, setGamification] = useState<GamificationState>(getInitialGamificationState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
+
+  // --- Autonomous Mode State ---
+  const [isAutonomousMode, setIsAutonomousMode] = useState<boolean>(false);
+  const [isAutonomousLoading, setIsAutonomousLoading] = useState<boolean>(false);
+  const [agentBudget, setAgentBudget] = useState<number>(DEFAULT_AGENT_BUDGET);
+  const [agentCallsMade, setAgentCallsMade] = useState<number>(0);
 
   const [debugLog, setDebugLog] = useState<string[]>([]);
     
@@ -90,6 +99,10 @@ const App: React.FC = () => {
             if (savedState.trajectoryState) setTrajectoryState(savedState.trajectoryState);
             if (savedState.gamification) setGamification(savedState.gamification);
             if (savedState.exploredTopics) setExploredTopics(new Set(savedState.exploredTopics));
+            // Load autonomous mode state
+            if (savedState.isAutonomousMode) setIsAutonomousMode(savedState.isAutonomousMode);
+            if (savedState.agentBudget) setAgentBudget(savedState.agentBudget);
+            if (savedState.agentCallsMade) setAgentCallsMade(savedState.agentCallsMade);
 
             addLog("Successfully restored application state from previous session.");
         } else {
@@ -111,27 +124,22 @@ const App: React.FC = () => {
   // Save state to localStorage whenever it changes
   useEffect(() => {
     // Avoid saving the initial blank state on first load
-    if (!hasSearched && !workspace && !topic) {
+    if (!hasSearched && !workspace && !topic && !isAutonomousMode) {
         return;
     }
 
     try {
         const stateToSave = {
-            topic,
-            model,
-            quantization,
-            device,
-            workspace,
-            hasSearched,
-            trajectoryState,
-            gamification,
-            exploredTopics: Array.from(exploredTopics), // Convert Set to Array for JSON
+            topic, model, quantization, device,
+            workspace, hasSearched, trajectoryState, gamification,
+            exploredTopics: Array.from(exploredTopics),
+            isAutonomousMode, agentBudget, agentCallsMade,
         };
         localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (error) {
         addLog(`Error saving state to localStorage: ${error}`);
     }
-  }, [topic, model, quantization, device, workspace, hasSearched, trajectoryState, gamification, exploredTopics]);
+  }, [topic, model, quantization, device, workspace, hasSearched, trajectoryState, gamification, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade]);
 
 
   const handleApiKeyChange = (key: string) => {
@@ -148,7 +156,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Ascension Framework Logic ---
+  // --- Gamification Logic ---
   const updateAscensionState = useCallback((action: string, payload?: any) => {
     setGamification(prev => {
         let newVectors = { ...prev.vectors };
@@ -156,28 +164,34 @@ const App: React.FC = () => {
         let updatedState = { ...prev, vectors: newVectors };
         let newAchievements = { ...prev.achievements };
         
-        // 1. Update Vectors based on actions
         switch(action) {
-            case 'DISPATCH_AGENT':
-                newVectors.memic += VECTOR_POINTS.MEMIC.DISPATCH_AGENT;
-                break;
-            case 'SYNTHESIZE':
-                newVectors.memic += VECTOR_POINTS.MEMIC.SYNTHESIZE;
-                break;
-            case 'NEW_TOPIC':
-                newVectors.memic += VECTOR_POINTS.MEMIC.NEW_TOPIC;
-                break;
-            case 'UPDATE_KNOWLEDGE_GRAPH':
-                newVectors.memic += (payload.nodesAdded || 0) * VECTOR_POINTS.MEMIC.BUILD_GRAPH_NODE;
+            case 'DISPATCH_AGENT': newVectors.memic += VECTOR_POINTS.MEMIC.DISPATCH_AGENT; break;
+            case 'SYNTHESIZE': newVectors.memic += VECTOR_POINTS.MEMIC.SYNTHESIZE; break;
+            case 'NEW_TOPIC': newVectors.memic += VECTOR_POINTS.MEMIC.NEW_TOPIC; break;
+            case 'UPDATE_KNOWLEDGE_GRAPH': newVectors.memic += (payload.nodesAdded || 0) * VECTOR_POINTS.MEMIC.BUILD_GRAPH_NODE; break;
+            case 'DISCOVER_TREND':
+                if (payload.trendData) {
+                    const { velocity, impact } = payload.trendData;
+                    newVectors.memic += VECTOR_POINTS.MEMIC.DISCOVER_TREND;
+                    newVectors.memic += velocity * VECTOR_POINTS.MEMIC.TREND_VELOCITY_MULTIPLIER;
+                    newVectors.memic += impact * VECTOR_POINTS.MEMIC.TREND_IMPACT_MULTIPLIER;
+                    
+                    if (!newAchievements.TREND_SPOTTER.unlocked) {
+                        newAchievements.TREND_SPOTTER.unlocked = true;
+                        newToasts.push({ id: Date.now() + 2, title: 'Achievement Unlocked!', message: newAchievements.TREND_SPOTTER.name, icon: 'achievement' });
+                    }
+                    if (velocity >= 80 && !newAchievements.EXPONENTIAL_THINKER.unlocked) {
+                        newAchievements.EXPONENTIAL_THINKER.unlocked = true;
+                        newToasts.push({ id: Date.now() + 3, title: 'Achievement Unlocked!', message: newAchievements.EXPONENTIAL_THINKER.name, icon: 'achievement' });
+                    }
+                }
                 break;
             case 'UPDATE_TRAJECTORY': {
                 const newLongevityScore = Math.max(0, (100 - payload.biologicalAge) * 10);
                 updatedState.longevityScore = newLongevityScore;
-                newVectors.cognitive = newLongevityScore; // Cognitive vector is directly tied to the score
+                newVectors.cognitive = newLongevityScore; 
                 
-                if (payload.interventionEffect) {
-                    newVectors.genetic += Math.round(payload.interventionEffect * VECTOR_POINTS.GENETIC.BIOMARKER_IMPROVEMENT_MULTIPLIER);
-                }
+                if (payload.interventionEffect) newVectors.genetic += Math.round(payload.interventionEffect * VECTOR_POINTS.GENETIC.BIOMARKER_IMPROVEMENT_MULTIPLIER);
                 if (payload.isRadical) {
                     newVectors.genetic += VECTOR_POINTS.GENETIC.RADICAL_INTERVENTION_BONUS;
                     if (!newAchievements.TRANSHUMANIST.unlocked) {
@@ -189,36 +203,214 @@ const App: React.FC = () => {
             }
         }
         
-        // 2. Check for Realm Advancement
         const currentRealmDef = REALM_DEFINITIONS.find(r => r.realm === updatedState.realm);
         const nextRealmIndex = REALM_DEFINITIONS.indexOf(currentRealmDef!) - 1;
 
         if (nextRealmIndex >= 0) {
             const nextRealmDef = REALM_DEFINITIONS[nextRealmIndex];
-            if (
-                updatedState.vectors.cognitive >= nextRealmDef.thresholds.cognitive &&
-                updatedState.vectors.genetic >= nextRealmDef.thresholds.genetic &&
-                updatedState.vectors.memic >= nextRealmDef.thresholds.memic
-            ) {
+            if (updatedState.vectors.cognitive >= nextRealmDef.thresholds.cognitive && updatedState.vectors.genetic >= nextRealmDef.thresholds.genetic && updatedState.vectors.memic >= nextRealmDef.thresholds.memic) {
                 updatedState.realm = nextRealmDef.realm;
                 newToasts.push({ id: Date.now(), title: 'Realm Ascension!', message: `You have ascended to the Realm of the ${nextRealmDef.realm}.`, icon: 'ascension' });
-                if (!newAchievements.REALM_ASCENSION.unlocked && nextRealmDef.realm === Realm.OptimizedMortal) {
-                   newAchievements.REALM_ASCENSION.unlocked = true;
-                }
+                if (!newAchievements.REALM_ASCENSION.unlocked && nextRealmDef.realm === Realm.OptimizedMortal) newAchievements.REALM_ASCENSION.unlocked = true;
             }
         }
         
         updatedState.achievements = newAchievements;
-
-        if (newToasts.length > 0) {
-            setToasts(prevToasts => [...prevToasts, ...newToasts]);
-        }
+        if (newToasts.length > 0) setToasts(prevToasts => [...prevToasts, ...newToasts]);
         
         return updatedState;
     });
   }, []);
+  
+  const mergeAgentResponse = useCallback((response: any) => {
+    setWorkspace(prev => {
+        const baseWorkspace = prev || { topic: '', items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null };
+        const newItems = response.items.filter((newItem: any) => !baseWorkspace.items.some(existing => existing.id === newItem.id));
+        const newSources = response.sources?.filter((newSrc: any) => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
+        
+        let newGraph = baseWorkspace.knowledgeGraph;
+        if (response.knowledgeGraph) {
+            const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id) || []);
+            const newNodes = response.knowledgeGraph.nodes.filter((n: any) => !existingNodeIds.has(n.id));
+            const existingEdgeIds = new Set(baseWorkspace.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
+            const newEdges = response.knowledgeGraph.edges.filter((e: any) => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
+            newGraph = {
+                nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
+                edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
+            };
+        }
+        
+        return {
+            topic: baseWorkspace.topic,
+            items: [...baseWorkspace.items, ...newItems],
+            sources: [...baseWorkspace.sources, ...newSources],
+            knowledgeGraph: newGraph,
+            synthesis: baseWorkspace.synthesis
+        };
+      });
+  }, []);
 
-  // Effect to update score and check achievements when trajectory changes
+  // Effect for Autonomous Agent
+  useEffect(() => {
+    if (!isAutonomousMode) return;
+
+    let intervalId: number | undefined;
+
+    const runAutonomousAgent = async () => {
+      if (agentCallsMade >= agentBudget) {
+        addLog("[Autonomous] Daily budget reached. Stopping periodic checks.");
+        if (intervalId) clearInterval(intervalId);
+        setIsAutonomousLoading(false);
+        return;
+      }
+      
+      addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
+      setIsAutonomousLoading(true);
+
+      try {
+        const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device);
+        addLog(`[Autonomous] Agent finished. Found ${response.items.length} new trends.`);
+        
+        response.items.forEach(item => {
+            if (item.type === 'trend' && item.trendData) {
+                updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
+            }
+        });
+
+        mergeAgentResponse(response);
+        setAgentCallsMade(prev => prev + 1);
+
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
+        addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
+      } finally {
+        setIsAutonomousLoading(false);
+      }
+    };
+
+    runAutonomousAgent();
+    intervalId = window.setInterval(runAutonomousAgent, AUTONOMOUS_INTERVAL_MS);
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        addLog("[Autonomous] Mode deactivated. Interval cleared.");
+      }
+    };
+  }, [isAutonomousMode, agentBudget, agentCallsMade, model, quantization, apiKey, device, addLog, mergeAgentResponse, updateAscensionState]);
+
+
+  const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
+    if (!topic.trim()) { addLog(`[handleDispatchAgent] Aborted: topic is empty.`); return; }
+    
+    addLog(`[handleDispatchAgent] Processing topic: "${topic}"`);
+    updateAscensionState('DISPATCH_AGENT');
+    if (!gamification.achievements.FIRST_RESEARCH.unlocked) {
+        setGamification(prev => ({...prev, achievements: {...prev.achievements, FIRST_RESEARCH: {...prev.achievements.FIRST_RESEARCH, unlocked: true}}}));
+        setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Budding Scientist", icon: 'achievement'}]);
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setLoadingMessage('Dispatching Agent...');
+    if (!hasSearched) setHasSearched(true);
+    
+    const currentWorkspace = workspace || { topic, items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null };
+
+    try {
+      const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device, setLoadingMessage);
+      addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
+      
+      response.items.forEach(item => {
+          if (item.type === 'trend' && item.trendData) updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
+      });
+      if (response.knowledgeGraph && response.knowledgeGraph.nodes.length > (currentWorkspace.knowledgeGraph?.nodes.length ?? 0)) {
+           if (!gamification.achievements.KNOWLEDGE_ARCHITECT.unlocked && response.knowledgeGraph.nodes.length >= 5) {
+              setGamification(prev => ({...prev, achievements: {...prev.achievements, KNOWLEDGE_ARCHITECT: {...prev.achievements.KNOWLEDGE_ARCHITECT, unlocked: true}}}));
+              setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Knowledge Architect", icon: 'achievement'}]);
+          }
+          const nodesAdded = response.knowledgeGraph.nodes.length - (currentWorkspace.knowledgeGraph?.nodes.length ?? 0);
+          if (nodesAdded > 0) updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
+      }
+
+      mergeAgentResponse(response);
+
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'An unknown agent error occurred.';
+      addLog(`ERROR in handleDispatchAgent: ${msg}`);
+      if (model.provider === ModelProvider.HuggingFace && (msg.includes('Failed to fetch') || msg.includes('Failed to run model'))) {
+           setError('Failed to load the Hugging Face model. This can be caused by a network issue, an ad blocker, or a temporary problem with the model servers. Please check your connection, disable browser extensions like ad blockers, and try again. If the problem persists, try selecting a different model.');
+      } else {
+          setError(msg);
+      }
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [topic, model, quantization, device, apiKey, hasSearched, workspace, updateAscensionState, addLog, gamification.achievements, mergeAgentResponse]);
+
+  const handleSynthesize = useCallback(async () => {
+    if (!workspace?.items || workspace.items.length === 0) return;
+
+    addLog(`Synthesizing findings for "${workspace.topic}"...`);
+    updateAscensionState('SYNTHESIZE');
+    if (!gamification.achievements.SYNTHESIZER.unlocked) {
+        setGamification(prev => ({...prev, achievements: {...prev.achievements, SYNTHESIZER: {...prev.achievements.SYNTHESIZER, unlocked: true}}}));
+        setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "The Synthesizer", icon: 'achievement'}]);
+    }
+    
+    setIsSynthesizing(true);
+    setSynthesisError(null);
+    setWorkspace(prev => prev ? {...prev, synthesis: null} : null);
+
+    try {
+      const response = await synthesizeFindings(workspace.topic || topic, workspace.items, model, quantization, addLog, apiKey, device);
+      addLog('Synthesis complete.');
+      setWorkspace(prev => prev ? {...prev, synthesis: response} : null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'An unknown error occurred during synthesis.';
+      addLog(`ERROR during synthesis: ${msg}`);
+      setSynthesisError(msg);
+    } finally {
+      setIsSynthesizing(false);
+    }
+  }, [workspace, topic, model, quantization, device, updateAscensionState, addLog, apiKey, gamification.achievements]);
+  
+    const handleTopicChange = (newTopic: string) => {
+        setTopic(newTopic);
+        const newTopicLower = newTopic.toLowerCase().trim();
+        const exploredTopicsLower = new Set(Array.from(exploredTopics).map(t => t.toLowerCase().trim()));
+        
+        if (newTopicLower && !exploredTopicsLower.has(newTopicLower)) {
+            const newExplored = new Set(exploredTopics).add(newTopic);
+            setExploredTopics(newExplored);
+            updateAscensionState('NEW_TOPIC');
+            if (newExplored.size >= 3 && !gamification.achievements.HALLMARK_EXPLORER.unlocked) {
+                setGamification(prev => ({...prev, achievements: {...prev.achievements, HALLMARK_EXPLORER: {...prev.achievements.HALLMARK_EXPLORER, unlocked: true}}}));
+                setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Hallmark Explorer", icon: 'achievement'}]);
+            }
+        }
+    }
+
+  const handleApplyIntervention = useCallback((interventionId: string | null) => {
+      const intervention = INTERVENTIONS.find(i => i.id === interventionId);
+      const updatedState = applyIntervention(interventionId);
+      setTrajectoryState(updatedState);
+      addLog(`Applied intervention: ${intervention?.name || 'None'}`);
+      
+      if (!gamification.achievements.BIO_STRATEGIST.unlocked && interventionId) {
+          setGamification(prev => ({...prev, achievements: {...prev.achievements, BIO_STRATEGIST: {...prev.achievements.BIO_STRATEGIST, unlocked: true}}}));
+          setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Bio-Strategist", icon: 'achievement'}]);
+      }
+      
+      if (intervention?.type === 'radical') {
+          if (!gamification.achievements.TRANSHUMANIST.unlocked) {
+               updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: updatedState.overallScore.projection[0].value, isRadical: true });
+          }
+      }
+  }, [gamification.achievements, updateAscensionState, addLog]);
+
+    // Effect to update score and check achievements when trajectory changes
   useEffect(() => {
     if (trajectoryState) {
         const biologicalAge = trajectoryState.overallScore.projection[0].value;
@@ -232,130 +424,6 @@ const App: React.FC = () => {
         updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge, interventionEffect, isRadical });
     }
   }, [trajectoryState, updateAscensionState]);
-
-  const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
-    addLog(`[handleDispatchAgent] Triggered for agent: ${agentType}`);
-    if (!topic.trim()) {
-        addLog(`[handleDispatchAgent] Aborted: topic is empty or whitespace.`);
-        return;
-    }
-    
-    addLog(`[handleDispatchAgent] Processing topic: "${topic}"`);
-
-    updateAscensionState('DISPATCH_AGENT');
-    setIsLoading(true);
-    setError(null);
-    setLoadingMessage('Dispatching Agent...');
-    if (!hasSearched) setHasSearched(true);
-    
-    const currentWorkspace = workspace || {
-        topic: topic,
-        items: [],
-        sources: [],
-        knowledgeGraph: { nodes: [], edges: [] },
-        synthesis: null,
-    };
-
-    try {
-      const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device, setLoadingMessage);
-      addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
-      
-      setWorkspace(prev => {
-        const baseWorkspace = prev || currentWorkspace;
-        const newItems = response.items.filter(newItem => !baseWorkspace.items.some(existing => existing.id === newItem.id));
-        const newSources = response.sources?.filter(newSrc => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
-        
-        let newGraph = baseWorkspace.knowledgeGraph;
-        let nodesAdded = 0;
-        if(response.knowledgeGraph) {
-            const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id));
-            const newNodes = response.knowledgeGraph.nodes.filter(n => !existingNodeIds.has(n.id));
-            nodesAdded = newNodes.length;
-            const newEdges = response.knowledgeGraph.edges; // for simplicity, overwrite edges
-            if (nodesAdded > 0) {
-                 addLog(`Adding ${nodesAdded} new nodes to the knowledge graph.`);
-                 newGraph = {
-                    nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
-                    edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
-                 }
-                 updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
-            }
-        }
-        
-        return {
-            ...baseWorkspace,
-            topic: topic,
-            items: [...baseWorkspace.items, ...newItems],
-            sources: [...baseWorkspace.sources, ...newSources],
-            knowledgeGraph: newGraph,
-        };
-      });
-
-    } catch (e) {
-      if (e instanceof Error) {
-        addLog(`ERROR in handleDispatchAgent: ${e.message}`);
-        if (model.provider === ModelProvider.HuggingFace && (e.message.includes('Failed to fetch') || e.message.includes('Failed to run model'))) {
-             setError('Failed to load the Hugging Face model. This can be caused by a network issue, an ad blocker, or a temporary problem with the model servers. Please check your connection, disable browser extensions like ad blockers, and try again. If the problem persists, try selecting a different model.');
-        } else {
-            setError(e.message);
-        }
-      } else {
-        addLog(`ERROR in handleDispatchAgent: An unknown agent error occurred.`);
-        setError('An unknown agent error occurred.');
-      }
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
-  }, [topic, model, quantization, device, apiKey, hasSearched, workspace, updateAscensionState, addLog]);
-
-  const handleSynthesize = useCallback(async () => {
-    if (!workspace?.items || workspace.items.length === 0) return;
-
-    addLog(`Synthesizing findings for "${workspace.topic}"...`);
-    updateAscensionState('SYNTHESIZE');
-    setIsSynthesizing(true);
-    setSynthesisError(null);
-    setWorkspace(prev => prev ? {...prev, synthesis: null} : null);
-
-    try {
-      const response = await synthesizeFindings(workspace.topic, workspace.items, model, quantization, addLog, apiKey, device);
-      addLog('Synthesis complete.');
-      setWorkspace(prev => prev ? {...prev, synthesis: response} : null);
-    } catch (e) {
-      if (e instanceof Error) {
-        addLog(`ERROR during synthesis: ${e.message}`);
-        setSynthesisError(e.message);
-      } else {
-        addLog('ERROR during synthesis: An unknown error occurred.');
-        setSynthesisError('An unknown error occurred during synthesis.');
-      }
-    } finally {
-      setIsSynthesizing(false);
-    }
-  }, [workspace, model, quantization, device, updateAscensionState, addLog, apiKey]);
-  
-    const handleTopicChange = (newTopic: string) => {
-        setTopic(newTopic);
-        if (!exploredTopics.has(newTopic)) {
-            const newExplored = new Set(exploredTopics).add(newTopic);
-            setExploredTopics(newExplored);
-            updateAscensionState('NEW_TOPIC');
-        }
-    }
-
-  const handleApplyIntervention = useCallback((interventionId: string | null) => {
-      const intervention = INTERVENTIONS.find(i => i.id === interventionId);
-      const updatedState = applyIntervention(interventionId);
-      setTrajectoryState(updatedState);
-      addLog(`Applied intervention: ${intervention?.name || 'None'}`);
-      
-      if (intervention?.type === 'radical') {
-          if (!gamification.achievements.TRANSHUMANIST.unlocked) {
-               updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: updatedState.overallScore.projection[0].value, isRadical: true });
-          }
-      }
-  }, [gamification.achievements.TRANSHUMANIST.unlocked, updateAscensionState, addLog]);
   
   const handleResetState = useCallback(() => {
     if (window.confirm("Are you sure you want to reset all your progress and saved data? This action cannot be undone.")) {
@@ -364,6 +432,12 @@ const App: React.FC = () => {
         addLog("User triggered a full state reset. Reloading the application...");
         window.location.reload();
     }
+  }, [addLog]);
+
+  const handleResetBudget = useCallback(() => {
+    setAgentCallsMade(0);
+    addLog("Autonomous agent daily budget has been reset.");
+    setToasts(prev => [...prev, {id: Date.now(), title: "Budget Reset", message: "Autonomous agent call count is now 0."}]);
   }, [addLog]);
 
   const dismissToast = (id: number) => {
@@ -388,25 +462,30 @@ const App: React.FC = () => {
           setQuantization={setQuantization}
           device={device}
           setDevice={setDevice}
+          isAutonomousMode={isAutonomousMode}
+          setIsAutonomousMode={setIsAutonomousMode}
+          agentBudget={agentBudget}
+          setAgentBudget={setAgentBudget}
+          agentCallsMade={agentCallsMade}
         />
         <div className="mt-4">
           <WorkspaceView
             workspace={workspace}
-            isLoading={isLoading && !workspace}
+            isLoading={isLoading && !hasSearched}
             loadingMessage={loadingMessage}
             error={error}
             hasSearched={hasSearched}
             isSynthesizing={isSynthesizing}
             synthesisError={synthesisError}
             onSynthesize={handleSynthesize}
-            currentTopic={topic}
-            onSelectTopic={handleTopicChange}
             trajectoryState={trajectoryState}
             onApplyIntervention={handleApplyIntervention}
+            isAutonomousMode={isAutonomousMode}
+            isAutonomousLoading={isAutonomousLoading}
           />
         </div>
       </main>
-      <DebugLogView logs={debugLog} onReset={handleResetState} />
+      <DebugLogView logs={debugLog} onReset={handleResetState} onResetBudget={handleResetBudget} />
     </div>
   );
 };

@@ -1,9 +1,9 @@
 
+
 import React from 'react';
 import { type WorkspaceState, type WorkspaceItem, KnowledgeGraphNode, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon } from './icons';
-import AgingSchemeView from './AgingSchemeView';
+import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon } from './icons';
 import TrajectoryView from './TrajectoryView';
 
 interface WorkspaceViewProps {
@@ -14,11 +14,11 @@ interface WorkspaceViewProps {
   isSynthesizing: boolean;
   synthesisError: string | null;
   onSynthesize: () => void;
-  currentTopic: string;
-  onSelectTopic: (topic: string) => void;
   trajectoryState: TrajectoryState | null;
   onApplyIntervention: (interventionId: string | null) => void;
   loadingMessage: string;
+  isAutonomousMode: boolean;
+  isAutonomousLoading: boolean;
 }
 
 const NodeChip: React.FC<{ node: KnowledgeGraphNode }> = ({ node }) => {
@@ -94,6 +94,51 @@ const formatSynthesis = (text: string | null): string => {
     }).join('').replace(/<li>/g, '<ul><li>').replace(/<\/li>(?!<li>)/g, '</li></ul>').replace(/<\/li><li>/g, '</li><li>');
 };
 
+const TrendCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
+    if (!item.trendData) return null;
+    const { novelty, velocity, impact, justification } = item.trendData;
+
+    const getScoreColor = (score: number) => {
+        if (score >= 80) return 'text-purple-400';
+        if (score >= 60) return 'text-blue-400';
+        if (score >= 40) return 'text-teal-400';
+        return 'text-slate-400';
+    };
+
+    return (
+        <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-purple-700/50 rounded-lg p-5 shadow-lg shadow-purple-900/20">
+            <div className="flex items-start gap-4">
+                <div className="text-purple-400 mt-1"><SingularityIcon className="h-8 w-8" /></div>
+                <div className="flex-1">
+                    <h3 className="text-xl font-bold text-slate-100 mb-1">{item.title}</h3>
+                    <p className="text-slate-300 leading-relaxed mb-4">{item.summary}</p>
+                    
+                    <div className="flex justify-around gap-4 p-3 mb-4 bg-slate-900/50 rounded-lg">
+                        <div className="text-center">
+                            <div className="text-sm text-slate-400">Novelty</div>
+                            <div className={`text-2xl font-bold ${getScoreColor(novelty)}`}>{novelty}</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-sm text-slate-400">Velocity</div>
+                            <div className={`text-2xl font-bold ${getScoreColor(velocity)}`}>{velocity}</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-sm text-slate-400">Impact</div>
+                            <div className={`text-2xl font-bold ${getScoreColor(impact)}`}>{impact}</div>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-4 pt-4 border-t border-slate-700">
+                        <h4 className="font-semibold text-slate-300 mb-1">Justification:</h4>
+                        <p className="text-sm text-slate-400 italic">"{justification}"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
     const iconMap = {
         article: <ArticleIcon />,
@@ -102,6 +147,7 @@ const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
         compound: <CompoundIcon className="h-6 w-6" />,
         protein: <ProteinIcon className="h-6 w-6" />,
         process: <PathwayIcon className="h-6 w-6" />,
+        trend: <SingularityIcon className="h-6 w-6 text-purple-400" />,
     };
 
     return (
@@ -119,21 +165,33 @@ const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
     )
 };
 
-const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, currentTopic, onSelectTopic, trajectoryState, onApplyIntervention, loadingMessage }) => {
+const AutonomousStatusIndicator: React.FC<{ isLoading: boolean }> = ({ isLoading }) => (
+    <div className="mb-4 flex items-center justify-center gap-3 text-center px-4 py-2 bg-purple-900/20 border border-purple-700/30 rounded-lg">
+        <div className={`relative flex h-3 w-3 ${isLoading ? 'animate-pulse' : ''}`}>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
+        </div>
+        <p className="text-sm text-purple-300">
+            {isLoading ? 'Autonomous agent is currently searching...' : 'Autonomous mode active. Scanning for radical life extension trends.'}
+        </p>
+    </div>
+);
+
+
+const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, trajectoryState, onApplyIntervention, loadingMessage, isAutonomousMode, isAutonomousLoading }) => {
   if (isLoading && !workspace) {
     return <LoadingSpinner message={loadingMessage} />;
   }
+  
+  const trendItems = workspace?.items.filter(i => i.type === 'trend') ?? [];
+  const otherItems = workspace?.items.filter(i => i.type !== 'trend') ?? [];
 
   return (
     <div className="w-full max-w-5xl mx-auto p-4 space-y-8">
       {isLoading && <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">Processing...</div>}
-
-      <AgingSchemeView 
-        workspace={workspace}
-        currentTopic={currentTopic}
-        onSelectTopic={onSelectTopic}
-      />
       
+      {isAutonomousMode && <AutonomousStatusIndicator isLoading={isAutonomousLoading} />}
+
       {error && (
         <div className="text-center py-12 text-red-400 bg-red-900/20 border border-red-500 rounded-lg max-w-3xl mx-auto">
           <h3 className="text-xl font-bold">An Error Occurred</h3>
@@ -143,8 +201,8 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
       
       {!hasSearched && !isLoading && !error && (
         <div className="text-center py-12">
-            <h2 className="text-2xl font-semibold text-slate-400">Your journey begins here.</h2>
-            <p className="text-slate-500 mt-2">Select a process from the scheme above and dispatch an AI agent to start building your blueprint.</p>
+            <h2 className="text-2xl font-semibold text-slate-400">Your journey to singularity begins.</h2>
+            <p className="text-slate-500 mt-2">Enter a research area and dispatch the Singularity Detector to find the future.</p>
         </div>
       )}
       
@@ -157,6 +215,18 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
 
       {hasSearched && workspace && workspace.items.length > 0 && (
         <>
+          {/* Trend Items Section */}
+           {trendItems.length > 0 && (
+            <div>
+                <h4 className="text-3xl font-bold text-slate-100 mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-fuchsia-400">Emerging Trends</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {trendItems.map((item) => (
+                        <TrendCard key={item.id} item={item} />
+                    ))}
+                </div>
+            </div>
+          )}
+
           {/* Synthesis Section */}
           <div className="p-6 bg-slate-800/50 backdrop-blur-sm rounded-lg border border-slate-700">
               <button
@@ -196,14 +266,16 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
           
           <KnowledgeGraphDisplay graph={workspace.knowledgeGraph ?? null} />
 
-          <div>
-            <h4 className="text-2xl font-bold text-slate-100 mb-4">Collected Workspace Items ({workspace.items.length})</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {workspace.items.map((item) => (
-                  <WorkspaceItemCard key={item.id} item={item} />
-                ))}
+          {otherItems.length > 0 && (
+            <div>
+              <h4 className="text-2xl font-bold text-slate-100 mb-4">Collected Workspace Items ({otherItems.length})</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {otherItems.map((item) => (
+                    <WorkspaceItemCard key={item.id} item={item} />
+                  ))}
+              </div>
             </div>
-          </div>
+          )}
           
           {workspace.sources.length > 0 && (
             <div className="mt-8 pt-6 border-t border-slate-700">

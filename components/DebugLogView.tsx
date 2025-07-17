@@ -1,11 +1,13 @@
+
 import React, { useState } from 'react';
 
 interface DebugLogViewProps {
     logs: string[];
     onReset: () => void;
+    onResetBudget: () => void;
 }
 
-const DebugLogView: React.FC<DebugLogViewProps> = ({ logs, onReset }) => {
+const DebugLogView: React.FC<DebugLogViewProps> = ({ logs, onReset, onResetBudget }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
@@ -14,6 +16,13 @@ const DebugLogView: React.FC<DebugLogViewProps> = ({ logs, onReset }) => {
                 <div className="flex justify-between items-center mb-2 gap-2">
                     <h3 className="text-lg font-bold text-slate-200">Event Log</h3>
                     <div className="flex items-center gap-2">
+                         <button
+                            onClick={onResetBudget}
+                            className="text-xs px-2 py-1 bg-blue-800/50 text-blue-300 border border-blue-700 rounded-md hover:bg-blue-700/50"
+                            title="Reset autonomous agent call count for the day"
+                        >
+                            Reset Budget
+                        </button>
                         <button
                             onClick={onReset}
                             className="text-xs px-2 py-1 bg-red-800/50 text-red-300 border border-red-700 rounded-md hover:bg-red-700/50"

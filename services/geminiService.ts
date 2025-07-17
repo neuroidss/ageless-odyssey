@@ -62,6 +62,50 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
     const isLocalModel = provider === ModelProvider.Ollama || provider === ModelProvider.HuggingFace;
 
     switch (agentType) {
+        case AgentType.TrendSpotter: {
+            const userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3-5 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
+    
+- Novelty: How new and non-obvious is this trend? (0=well-established, 100=brand new paradigm).
+- Velocity: How quickly is this trend gaining traction and being published on? (0=stagnant, 100=exponential growth).
+- Impact: How radically could this trend change the field of longevity if successful? (0=incremental, 100=paradigm-shifting, solves a major hallmark).
+
+Your response MUST be a JSON object with a single key 'trends', containing an array of trend objects.
+
+Example JSON structure:
+{
+  "trends": [
+    {
+      "name": "Targeting Glial-Specific Autophagy",
+      "summary": "A new focus on clearing cellular debris specifically within glial cells of the brain to combat neuroinflammation and cognitive decline.",
+      "justification": "Recent papers show a direct link between impaired glial autophagy and Alzheimer's models. This moves beyond general autophagy to a highly specific and impactful target.",
+      "novelty": 85,
+      "velocity": 70,
+      "impact": 90
+    }
+  ]
+}`;
+
+            return {
+                systemInstruction: `You are a 'Singularity Detector' AI, a world-class research analyst specializing in identifying exponentially growing and radically transformative trends in longevity science. Your task is to analyze scientific literature, patents, and pre-prints to find the 'next big thing'. ${jsonOutputInstruction}`,
+                userPrompt: userPrompt,
+                responseSchema: {
+                    type: Type.OBJECT, properties: {
+                        trends: {
+                            type: Type.ARRAY, items: {
+                                type: Type.OBJECT, properties: {
+                                    name: { type: Type.STRING },
+                                    summary: { type: Type.STRING },
+                                    justification: { type: Type.STRING },
+                                    novelty: { type: Type.NUMBER },
+                                    velocity: { type: Type.NUMBER },
+                                    impact: { type: Type.NUMBER },
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+        }
         case AgentType.GeneAnalyst: {
             let userPrompt = `${contextPreamble}For the research topic "${query}", identify the top 5 most relevant genes discussed in the provided text. Respond with a JSON object with a single key 'genes'. This key should contain an array of objects, where each object has "symbol" (string), "name" (string), and "summary" (string).`;
             if (isLocalModel) {
@@ -146,6 +190,23 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
         let knowledgeGraph: KnowledgeGraph | null = null;
 
         switch (agentType) {
+            case AgentType.TrendSpotter:
+                if (data.trends) {
+                    items = data.trends.map((t: any) => ({
+                        id: `trend-${t.name.replace(/\s+/g, '-')}`,
+                        type: 'trend',
+                        title: t.name,
+                        summary: t.summary,
+                        details: `Novelty: ${t.novelty}/100 | Velocity: ${t.velocity}/100 | Impact: ${t.impact}/100`,
+                        trendData: {
+                            novelty: t.novelty,
+                            velocity: t.velocity,
+                            impact: t.impact,
+                            justification: t.justification,
+                        }
+                    }));
+                }
+                break;
             case AgentType.GeneAnalyst:
                 if (data.genes) {
                     items = data.genes.map((g: any) => ({

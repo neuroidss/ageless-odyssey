@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const ArticleIcon = () => (
@@ -154,5 +155,11 @@ export const GearIcon = ({className = "h-5 w-5"}) => (
 export const ChevronDownIcon = ({className = "h-5 w-5"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
       <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+    </svg>
+);
+
+export const SingularityIcon = ({className = "h-7 w-7"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-2.474m0 0L3.182 6.37l5.159 2.972m0 0 3.182-5.5L12 6.37m0 0 8.818 5.09-5.159-2.972M12 6.37l-5.159 2.972m0 0 3.182 5.5M12 12.63l-2.51-2.225L12 6.37l2.51 2.225L12 12.63Z" />
     </svg>
 );

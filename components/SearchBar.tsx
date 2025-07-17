@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, HUGGING_FACE_DEVICES, HUGGING_FACE_QUANTIZATIONS } from '../constants';
-import { AgentIcon, GeneAnalystIcon, CompoundAnalystIcon, GearIcon, ChevronDownIcon } from './icons';
+import { AgentIcon, GeneAnalystIcon, CompoundAnalystIcon, GearIcon, ChevronDownIcon, SingularityIcon } from './icons';
 
 interface AgentControlPanelProps {
   topic: string;
@@ -16,12 +17,24 @@ interface AgentControlPanelProps {
   setQuantization: (quantization: string) => void;
   device: HuggingFaceDevice;
   setDevice: (device: HuggingFaceDevice) => void;
+  isAutonomousMode: boolean;
+  setIsAutonomousMode: (enabled: boolean) => void;
+  agentBudget: number;
+  setAgentBudget: (budget: number) => void;
+  agentCallsMade: number;
 }
 
-const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, onDispatchAgent, isLoading, model, setModel, apiKey, onApiKeyChange, quantization, setQuantization, device, setDevice }) => {
+const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
+  topic, setTopic, onDispatchAgent, isLoading, model, setModel, 
+  apiKey, onApiKeyChange, quantization, setQuantization, device, setDevice,
+  isAutonomousMode, setIsAutonomousMode, agentBudget, setAgentBudget, agentCallsMade
+}) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const primaryAgent = { id: AgentType.TrendSpotter, label: 'Detect Trends', icon: <SingularityIcon />, description: 'Find exponential trends in longevity research' };
+
   const secondaryAgents = [
+    { id: AgentType.KnowledgeNavigator, label: 'Navigate', icon: <AgentIcon />, description: 'Get articles & build graph' },
     { id: AgentType.GeneAnalyst, label: 'Genes', icon: <GeneAnalystIcon />, description: 'Extract relevant genes' },
     { id: AgentType.CompoundAnalyst, label: 'Compounds', icon: <CompoundAnalystIcon />, description: 'Find potential interventions' },
   ];
@@ -34,7 +47,7 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
     if (e.key === 'Enter') {
       e.preventDefault();
       if (!isLoading && topic && !(needsApiKey && !apiKey)) {
-        onDispatchAgent(AgentType.KnowledgeNavigator);
+        onDispatchAgent(primaryAgent.id);
       }
     }
   };
@@ -43,12 +56,12 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
     <div className="w-full max-w-4xl mx-auto p-4 space-y-4">
       {/* Main Search Input */}
       <div className="flex w-full items-center">
-        <div className="flex-grow bg-slate-800 border-2 border-slate-600 rounded-full focus-within:ring-4 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-all duration-300">
+        <div className="flex-grow bg-slate-800 border-2 border-slate-600 rounded-full focus-within:ring-4 focus-within:ring-purple-500/50 focus-within:border-purple-500 transition-all duration-300">
           <input
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="Search for a process, gene, or compound..."
+            placeholder="Enter a research area to spot trends (e.g., 'longevity')..."
             className="w-full pl-5 pr-4 py-4 text-lg bg-transparent focus:outline-none text-white placeholder-slate-400"
             disabled={isLoading}
             onKeyDown={handleKeyDown}
@@ -70,16 +83,16 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
       <div className="space-y-4 pt-4 border-t border-slate-700/50">
           {/* Primary Agent Button */}
           <button
-            onClick={() => onDispatchAgent(AgentType.KnowledgeNavigator)}
+            onClick={() => onDispatchAgent(primaryAgent.id)}
             disabled={isLoading || !topic || (needsApiKey && !apiKey)}
-            className="w-full flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-blue-600 text-white text-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-blue-500 shadow-lg shadow-blue-500/20"
-            aria-label="Navigate and build knowledge graph"
+            className="w-full flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-purple-600 text-white text-xl hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-500 shadow-lg shadow-purple-500/20"
+            aria-label={primaryAgent.description}
           >
             <div className="flex items-center gap-3">
-              <AgentIcon className="h-7 w-7"/>
-              <span>Navigate</span>
+              {primaryAgent.icon}
+              <span>{primaryAgent.label}</span>
             </div>
-            <span className="text-sm font-normal text-blue-200">Get articles & build graph</span>
+            <span className="text-sm font-normal text-purple-200">{primaryAgent.description}</span>
           </button>
 
           {/* Specialized Agent Buttons */}
@@ -110,7 +123,7 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
           aria-expanded={settingsOpen}
         >
           <GearIcon />
-          <span>Model & Connection Settings</span>
+          <span>Advanced Settings & Autonomous Mode</span>
           <ChevronDownIcon className={`transition-transform duration-300 ${settingsOpen ? 'rotate-180' : ''}`} />
         </button>
       </div>
@@ -118,6 +131,43 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ topic, setTopic, 
       {/* Collapsible Settings Panel */}
       {settingsOpen && (
         <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700 space-y-6">
+          
+          {/* Autonomous Agent Settings */}
+          <div className="p-4 border border-purple-700/50 rounded-lg bg-purple-900/10">
+            <h3 className="text-lg font-bold text-purple-300 mb-3">Autonomous Trend Spotting</h3>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-grow">
+                <label htmlFor="autonomous-toggle" className="font-semibold text-slate-200">Enable Autonomous Mode</label>
+                <p className="text-xs text-slate-400">Agent will automatically search for radical life extension trends in the background.</p>
+              </div>
+              <button
+                  onClick={() => setIsAutonomousMode(!isAutonomousMode)}
+                  className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${isAutonomousMode ? 'bg-purple-600' : 'bg-slate-600'}`}
+                  aria-pressed={isAutonomousMode}
+              >
+                  <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isAutonomousMode ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <div>
+                  <label htmlFor="agent-budget" className="block text-sm font-medium text-slate-300 mb-1">Daily Agent Budget (calls)</label>
+                  <input
+                    id="agent-budget"
+                    type="number"
+                    value={agentBudget}
+                    onChange={(e) => setAgentBudget(Math.max(0, parseInt(e.target.value, 10)))}
+                    disabled={isLoading}
+                    className="w-full bg-slate-700 text-slate-200 font-semibold px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:outline-none"
+                  />
+               </div>
+               <div className="flex items-end pb-2">
+                  <p className="text-sm text-slate-300 w-full text-center sm:text-left">
+                    Usage: <span className="font-bold text-white">{agentCallsMade} / {agentBudget}</span> calls
+                  </p>
+               </div>
+            </div>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
             <div>
               <label htmlFor="model-select" className="block text-sm font-medium text-slate-300 mb-1">AI Model</label>

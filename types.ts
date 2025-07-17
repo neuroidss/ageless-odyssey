@@ -18,6 +18,7 @@ export enum AgentType {
     KnowledgeNavigator = "Knowledge Navigator",
     GeneAnalyst = "Gene Analyst",
     CompoundAnalyst = "Compound Analyst",
+    TrendSpotter = "Trend Spotter",
 }
 
 export interface ModelDefinition {
@@ -26,14 +27,23 @@ export interface ModelDefinition {
     provider: ModelProvider;
 }
 
+export type TrendData = {
+    novelty: number; // Score 0-100
+    velocity: number; // Score 0-100
+    impact: number; // Score 0-100
+    justification: string;
+};
+
+
 // A more generic item to hold data from any source
 export interface WorkspaceItem {
   id:string;
-  type: 'article' | 'patent' | 'gene' | 'compound' | 'protein' | 'process';
+  type: 'article' | 'patent' | 'gene' | 'compound' | 'protein' | 'process' | 'trend';
   title: string;
   summary: string;
   details: string; // e.g., Authors, Inventors, Gene ID, Compound Formula
   sourceUri?: string; // Link to pubmed, patent office, etc.
+  trendData?: TrendData;
 }
 
 export interface GroundingSource {

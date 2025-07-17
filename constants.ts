@@ -28,6 +28,13 @@ export const EXAMPLE_TOPICS = [
     "Genomic instability",
     "Deregulated nutrient-sensing"
 ];
+
+// --- Autonomous Agent Constants ---
+export const AUTONOMOUS_AGENT_QUERY = "radical life extension and rejuvenation biotechnology";
+export const DEFAULT_AGENT_BUDGET = 10;
+export const AUTONOMOUS_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+
 export const SUPPORTED_MODELS: ModelDefinition[] = [
     // Hugging Face Transformers.js (runs in-browser)
     { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B (HF)', provider: ModelProvider.HuggingFace },
@@ -76,6 +83,9 @@ export const VECTOR_POINTS = {
         SYNTHESIZE: 20,
         NEW_TOPIC: 2,
         BUILD_GRAPH_NODE: 1,
+        DISCOVER_TREND: 15, // Base points for finding any trend
+        TREND_VELOCITY_MULTIPLIER: 0.2, // 0.2 points per velocity point
+        TREND_IMPACT_MULTIPLIER: 0.3, // 0.3 points per impact point
     },
     GENETIC: {
         // Points awarded per percentage point of biomarker improvement from an intervention
@@ -95,6 +105,8 @@ export const REALM_DEFINITIONS: { realm: Realm; description: string; thresholds:
 
 export const ACHIEVEMENTS: Record<string, Omit<Achievement, 'unlocked'>> = {
   FIRST_RESEARCH: { id: 'FIRST_RESEARCH', name: 'Budding Scientist', description: 'Dispatch your first AI agent to begin your research.', xp: 50 },
+  TREND_SPOTTER: { id: 'TREND_SPOTTER', name: 'Trend Spotter', description: 'Discover your first high-potential trend.', xp: 150 },
+  EXPONENTIAL_THINKER: { id: 'EXPONENTIAL_THINKER', name: 'Exponential Thinker', description: 'Discover a trend with a velocity score of 80 or higher.', xp: 250 },
   KNOWLEDGE_ARCHITECT: { id: 'KNOWLEDGE_ARCHITECT', name: 'Knowledge Architect', description: 'Build a knowledge graph with 5 or more nodes.', xp: 100 },
   SYNTHESIZER: { id: 'SYNTHESIZER', name: 'The Synthesizer', description: 'Generate your first AI synthesis to connect the dots.', xp: 75 },
   BIO_STRATEGIST: { id: 'BIO_STRATEGIST', name: 'Bio-Strategist', description: 'Simulate your first intervention to see the future.', xp: 75 },
