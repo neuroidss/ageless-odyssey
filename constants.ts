@@ -62,21 +62,21 @@ export const SUPPORTED_MODELS: ModelDefinition[] = [
 ];
 
 
-export const INTERVENTIONS: Intervention[] = [
+export const INTERVENTIONS: (Intervention & { sophistication: number })[] = [
     // Biological Interventions (For Biological Optimizer)
-    { id: 'cr', name: 'Caloric Restriction', description: 'Reduces metabolic stress and nutrient-sensing pathways.', type: 'biological', effects: { mito_efficiency: 0.1, epigenetic_noise: 0.08, proteostasis: 0.05 } },
-    { id: 'senolytics', name: 'Senolytics', description: 'Selectively clear senescent cells from tissues.', type: 'biological', effects: { senescent_cells: 0.3 } },
-    { id: 'metformin', name: 'Metformin', description: 'Improves insulin sensitivity and mitochondrial function.', type: 'biological', effects: { mito_efficiency: 0.15, senescent_cells: 0.05 } },
-    { id: 'nad_precursors', name: 'NAD+ Precursors', description: 'Boosts levels of NAD+, a key coenzyme for DNA repair and metabolism.', type: 'biological', effects: { telomere_length: 0.02, mito_efficiency: 0.1, proteostasis: 0.08 } },
+    { id: 'cr', name: 'Caloric Restriction', description: 'Reduces metabolic stress and nutrient-sensing pathways.', type: 'biological', sophistication: 1, effects: { mito_efficiency: 0.1, epigenetic_noise: 0.08, proteostasis: 0.05 } },
+    { id: 'senolytics', name: 'Senolytics', description: 'Selectively clear senescent cells from tissues.', type: 'biological', sophistication: 2, effects: { senescent_cells: 0.3 } },
+    { id: 'metformin', name: 'Metformin', description: 'Improves insulin sensitivity and mitochondrial function.', type: 'biological', sophistication: 1, effects: { mito_efficiency: 0.15, senescent_cells: 0.05 } },
+    { id: 'nad_precursors', name: 'NAD+ Precursors', description: 'Boosts levels of NAD+, a key coenzyme for DNA repair and metabolism.', type: 'biological', sophistication: 2, effects: { telomere_length: 0.02, mito_efficiency: 0.1, proteostasis: 0.08 } },
     
     // Environmental / Substrate Interventions (For Substrate Enhanced)
-    { id: 'gills_and_pressure_acclimation', name: 'Gills & Pressure Acclimation', description: 'Genetic modifications for underwater breathing and resisting deep-sea pressures.', type: 'environmental', effects: { mito_efficiency: 0.25, proteostasis: 0.2 } },
-    { id: 'radiation_shield_weave', name: 'Radiation Shield Gene-Weave', description: 'Tardigrade-inspired DNA repair and protein shielding for surviving cosmic radiation.', type: 'environmental', effects: { telomere_length: 0.1, senescent_cells: 0.2, epigenetic_noise: 0.2 } },
+    { id: 'gills_and_pressure_acclimation', name: 'Gills & Pressure Acclimation', description: 'Genetic modifications for underwater breathing and resisting deep-sea pressures.', type: 'environmental', sophistication: 5, effects: { mito_efficiency: 0.25, proteostasis: 0.2 } },
+    { id: 'radiation_shield_weave', name: 'Radiation Shield Gene-Weave', description: 'Tardigrade-inspired DNA repair and protein shielding for surviving cosmic radiation.', type: 'environmental', sophistication: 6, effects: { telomere_length: 0.1, senescent_cells: 0.2, epigenetic_noise: 0.2 } },
     
     // Radical Interventions (For later Realms)
-    { id: 'neuro_interface', name: 'Neural-Digital Interface', description: 'Augment the brain with a direct neural link, the first step towards an Exocortex.', type: 'radical', effects: { cognitive: 250 } },
-    { id: 'mind_upload', name: 'Mind Substrate Transfer', description: 'Complete transfer of consciousness to a digital substrate. Bypasses all biological limitations.', type: 'radical', effects: { all_biomarkers: 1.0, cognitive: 500 } },
-    { id: 'distributed_consciousness', name: 'Consciousness Distribution', description: 'Fractalize your digital mind across a decentralized network, making it resilient and near-omnipresent.', type: 'radical', effects: { cognitive: 1000 } },
+    { id: 'neuro_interface', name: 'Neural-Digital Interface', description: 'Augment the brain with a direct neural link, the first step towards an Exocortex.', type: 'radical', sophistication: 10, effects: { cognitive: 5000 } },
+    { id: 'mind_upload', name: 'Mind Substrate Transfer', description: 'Complete transfer of consciousness to a digital substrate. Bypasses all biological limitations.', type: 'radical', sophistication: 20, effects: { all_biomarkers: 1.0, cognitive: 15000 } },
+    { id: 'distributed_consciousness', name: 'Consciousness Distribution', description: 'Fractalize your digital mind across a decentralized network, making it resilient and near-omnipresent.', type: 'radical', sophistication: 50, effects: { cognitive: 50000 } },
 ];
 
 
@@ -84,91 +84,92 @@ export const INTERVENTIONS: Intervention[] = [
 
 export const VECTOR_POINTS = {
     MEMIC: {
-        DISPATCH_AGENT: 5,
-        SYNTHESIZE: 20,
-        NEW_TOPIC: 2,
-        BUILD_GRAPH_NODE: 1,
-        DISCOVER_TREND: 15, // Base points for finding any trend
-        TREND_VELOCITY_MULTIPLIER: 0.2, // 0.2 points per velocity point
-        TREND_IMPACT_MULTIPLIER: 0.3, // 0.3 points per impact point
+        DISPATCH_AGENT: 2,
+        // Points per item synthesized
+        SYNTHESIZE_PER_ITEM: 5, 
+        // Points per node and edge in graph
+        KNOWLEDGE_GRAPH_NODE: 1,
+        KNOWLEDGE_GRAPH_EDGE: 2,
+        // Points for discovering a trend, plus multipliers
+        DISCOVER_TREND_BASE: 25,
+        TREND_SCORE_MULTIPLIER: 0.5, // multiplier for the sum of novelty, velocity, impact
     },
     GENETIC: {
-        // Points awarded per percentage point of biomarker improvement from an intervention
-        BIOMARKER_IMPROVEMENT_MULTIPLIER: 5,
-        RADICAL_INTERVENTION_BONUS: 400, // Large bonus for cybernetic replacement
+        // Points awarded based on the sophistication of an intervention
+        INTERVENTION_BASE: 10,
     }
 };
 
 export const REALM_DEFINITIONS: { realm: Realm; description: string; criteria: string[]; thresholds: { cognitive: number; genetic: number; memic: number; } }[] = [
     { 
-        realm: Realm.StellarMetamorph, 
-        description: "Your form, a vessel of pure energy and data, is no longer limited by conventional physics, ready to traverse the void.",
+        realm: Realm.MortalShell, 
+        description: "The baseline human condition. Information processing is limited by biological hardware and its inherent decay.",
         criteria: [
-            "Manipulate local spacetime curvature.",
-            "Achieve interstellar travel without a physical vessel.",
-            "Cognitive processing capacity on a planetary scale."
+            "Biological processes follow standard Gompertz-Makeham law of mortality.",
+            "Information processing (cognition) is confined to endogenous neural structures.",
+            "Knowledge acquisition is dependent on external, non-integrated tools."
         ],
-        thresholds: { cognitive: 15000, genetic: 15000, memic: 20000 } 
-    },
-    { 
-        realm: Realm.DistributedEntity, 
-        description: "Severing ties to a single instance. Your consciousness exists as a decentralized network across multiple nodes.",
-        criteria: [
-            "Consciousness distributed over >3 independent nodes.",
-            "Demonstrate resilience to single-node failure.",
-            "Achieve consensus reality across instances."
-        ],
-        thresholds: { cognitive: 9500, genetic: 9000, memic: 10000 }
-    },
-    { 
-        realm: Realm.DigitalAscendant, 
-        description: "Achieving substrate independence. Your consciousness, now fully digitized, can inhabit simulated realities or portable hardware.",
-        criteria: [
-            "Full consciousness transfer with >99.9% fidelity.",
-            "Discard biological form as primary vessel.",
-            "Operate within multiple simulated realities simultaneously."
-        ],
-        thresholds: { cognitive: 6000, genetic: 5000, memic: 5000 }
-    },
-    { 
-        realm: Realm.ExocortexIntegrator, 
-        description: "Offloading cognition to a secure, external processing core via a direct neural interface, forming a 'golden core' of knowledge.",
-        criteria: [
-            "Neural interface bandwidth exceeds 10 Gbit/s.",
-            "Offload >50% of cognitive tasks to exocortex.",
-            "Memic vector score surpasses Genetic vector score."
-        ],
-        thresholds: { cognitive: 3000, genetic: 2500, memic: 1500 }
-    },
-    { 
-        realm: Realm.SubstrateEnhanced, 
-        description: "Moving beyond baseline biology by integrating basic cybernetics, advanced gene-weaves, and redundant organs.",
-        criteria: [
-            "Integrate first cybernetic augmentation.",
-            "Activate redundant vital organ systems.",
-            "Develop genetic resistance to cosmic radiation."
-        ],
-        thresholds: { cognitive: 1500, genetic: 1000, memic: 500 }
+        thresholds: { cognitive: 0, genetic: 0, memic: 0 }
     },
     { 
         realm: Realm.BiologicalOptimizer, 
-        description: "Mastering the body's own systems to achieve peak human health and reverse the core hallmarks of aging.",
+        description: "Mastering the body's own systems. Demonstrating predictable control over the core catalysts of aging.",
         criteria: [
-            "Achieve a Longevity Score > 500.",
-            "Halt telomere attrition.",
-            "Reduce senescent cell load to <1%."
+            "Demonstrate predictable, quantitative control over at least 3 hallmarks of aging using targeted interventions.",
+            "Achieve a negative delta between biological age (via epigenetic clocks) and chronological age for 12 consecutive months.",
+            "Successfully reverse a major age-related biomarker (e.g., senescent cell load) to levels typical of a younger phenotype."
         ],
-        thresholds: { cognitive: 500, genetic: 200, memic: 100 }
+        thresholds: { cognitive: 1000, genetic: 500, memic: 500 }
     },
     { 
-        realm: Realm.MortalShell, 
-        description: "The baseline human condition, a fragile vessel subject to the immutable decay of time.",
+        realm: Realm.SubstrateEnhanced, 
+        description: "Moving beyond baseline biology. Integrating non-biological substrates to augment or offload core functions.",
         criteria: [
-            "Standard biological limitations.",
-            "Subject to all hallmarks of aging.",
-            "Cognitive abilities confined to biological brain."
+            "Successfully integrate a non-biological substrate that measurably offloads a cognitive or metabolic function (e.g., an artificial endocrine controller).",
+            "Maintain homeostatic stability after simulated failure of a primary redundant biological organ.",
+            "Demonstrate a greater than 2-sigma resilience to an environmental stressor (e.g., radiation, hypoxia) compared to the non-augmented baseline."
         ],
-        thresholds: { cognitive: 0, genetic: 0, memic: 0 }
+        thresholds: { cognitive: 5000, genetic: 2500, memic: 2000 }
+    },
+    { 
+        realm: Realm.ExocortexIntegrator, 
+        description: "Expanding working memory. Offloading high-level cognition to a secure, external processing core.",
+        criteria: [
+            "Achieve stable, bidirectional neural interface bandwidth exceeding 1 Tbit/s.",
+            "Demonstrate the ability to solve a class of problems previously intractable to the un-augmented mind (e.g., visualizing 5-dimensional geometric spaces).",
+            "Offload >50% of symbolic reasoning tasks to the exocortex, verified by fMRI/MEG analysis showing reduced activity in corresponding biological brain regions."
+        ],
+        thresholds: { cognitive: 25000, genetic: 5000, memic: 10000 }
+    },
+    { 
+        realm: Realm.DigitalAscendant, 
+        description: "Achieving substrate independence. The mind, now fully digitized, can explore realities unbound by physics.",
+        criteria: [
+            "Replicate the full connectome and synaptic weight matrix to a computational substrate with >99.999% fidelity.",
+            "The digital substrate must independently generate a novel, falsifiable scientific theory that is later validated.",
+            "Demonstrate the ability to operate at a subjective speed of >1000x relative to biological time."
+        ],
+        thresholds: { cognitive: 100000, genetic: 10000, memic: 50000 }
+    },
+    { 
+        realm: Realm.DistributedEntity, 
+        description: "No longer a single instance. Consciousness exists as a unified, decentralized network across multiple substrates.",
+        criteria: [
+            "Maintain a single, coherent identity after the unscheduled termination and reintegration of >25% of computational nodes.",
+            "Achieve consensus on a novel mathematical proof by processing simultaneous, conflicting inputs from multiple, physically separate instances.",
+            "Demonstrate non-local awareness by accurately modeling a remote system using only fragmentary data from multiple nodes."
+        ],
+        thresholds: { cognitive: 500000, genetic: 20000, memic: 250000 }
+    },
+    { 
+        realm: Realm.StellarMetamorph, 
+        description: "A vessel of pure energy and data. Manipulating the fabric of the cosmos as a final-cause catalyst.",
+        criteria: [
+            "Demonstrate controlled, direct energy-to-mass-to-energy conversion with >99% efficiency.",
+            "Establish a stable communication network utilizing quantum entanglement over a 1 light-year distance.",
+            "Create a self-sustaining pocket universe with novel physical laws."
+        ],
+        thresholds: { cognitive: 2000000, genetic: 50000, memic: 1000000 } 
     },
 ].reverse(); // Reverse to have MortalShell at index 0 for easier progression logic
 

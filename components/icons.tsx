@@ -106,7 +106,7 @@ export const TrophyIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
-export const DnaIcon = ({className = "h-6 w-6"}) => (
+export const GeneticIcon = ({className = "h-6 w-6"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 4c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2-2 .9-2 2zM18 4c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2-2 .9-2 2zM6 6s.5 2 2.5 2S11 6 11 6M13 18s.5-2 2.5-2 2.5 2 2.5 2M11 6c0 2.5 2 4.5 2 4.5s2-2 2-4.5M6 18c0-2.5 2-4.5 2-4.5S10 11.5 10 14"/>
         <path d="M4 11.5c0 2 2 4.5 2 4.5s2-2.5 2-4.5"/>
@@ -114,13 +114,14 @@ export const DnaIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
-export const CognitiveIcon = ({className = "h-6 w-6"}) => (
+export const CognitiveBandwidthIcon = ({className = "h-6 w-6"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2a10 10 0 0 0-3.5 19.33V18a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3.33A10 10 0 0 0 12 2Z"/>
-        <path d="M8 18a4 4 0 0 0 4 4 4 4 0 0 0 4-4h-8Z"/>
-        <path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-        <path d="M19.33 15.5a2 2 0 0 1 0-7"/>
-        <path d="M4.67 15.5a2 2 0 0 0 0-7"/>
+      <path d="M12 2a10 10 0 0 0-3.5 19.33V18a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3.33A10 10 0 0 0 12 2Z"/>
+      <path d="M8 18a4 4 0 0 0 4 4 4 4 0 0 0 4-4h-8Z"/>
+      <path d="M5 14c-1.5-1-2-2.5-2-4"/>
+      <path d="M19 14c1.5-1 2-2.5 2-4"/>
+      <path d="M2.5 9c-1-2 0-4.5 2.5-6"/>
+      <path d="M21.5 9c1-2 0-4.5-2.5-6"/>
     </svg>
 );
 

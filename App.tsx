@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource, Intervention } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { 
@@ -255,53 +255,80 @@ const App: React.FC = () => {
   // --- Odyssey Logic ---
   const updateAscensionState = useCallback((action: string, payload?: any) => {
     setOdysseyState(prev => {
-        let newVectors = { ...prev.vectors };
-        const newToasts: ToastMessage[] = [];
-        let updatedState = { ...prev, vectors: newVectors };
+        let newMemic = prev.vectors.memic;
+        let newGenetic = prev.vectors.genetic;
+        let updatedState = { ...prev };
         let newAchievements = { ...prev.achievements };
+        const newToasts: ToastMessage[] = [];
         
         switch(action) {
-            case 'DISPATCH_AGENT': newVectors.memic += VECTOR_POINTS.MEMIC.DISPATCH_AGENT; break;
-            case 'SYNTHESIZE': newVectors.memic += VECTOR_POINTS.MEMIC.SYNTHESIZE; break;
-            case 'NEW_TOPIC': newVectors.memic += VECTOR_POINTS.MEMIC.NEW_TOPIC; break;
-            case 'UPDATE_KNOWLEDGE_GRAPH': newVectors.memic += (payload.nodesAdded || 0) * VECTOR_POINTS.MEMIC.BUILD_GRAPH_NODE; break;
+            case 'DISPATCH_AGENT':
+                newMemic += VECTOR_POINTS.MEMIC.DISPATCH_AGENT;
+                if (!newAchievements.FIRST_RESEARCH.unlocked) {
+                    newAchievements.FIRST_RESEARCH.unlocked = true;
+                    newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.FIRST_RESEARCH.name, icon: 'achievement' });
+                }
+                break;
+            case 'SYNTHESIZE':
+                const itemsSynthesized = payload?.itemCount || 0;
+                newMemic += itemsSynthesized * VECTOR_POINTS.MEMIC.SYNTHESIZE_PER_ITEM;
+                if (!newAchievements.SYNTHESIZER.unlocked) {
+                    newAchievements.SYNTHESIZER.unlocked = true;
+                    newToasts.push({ id: Date.now() + 2, title: 'Achievement Unlocked!', message: newAchievements.SYNTHESIZER.name, icon: 'achievement' });
+                }
+                break;
+            case 'UPDATE_KNOWLEDGE_GRAPH':
+                const { nodesAdded = 0, edgesAdded = 0, totalNodes = 0 } = payload;
+                newMemic += (nodesAdded * VECTOR_POINTS.MEMIC.KNOWLEDGE_GRAPH_NODE) + (edgesAdded * VECTOR_POINTS.MEMIC.KNOWLEDGE_GRAPH_EDGE);
+                 if (totalNodes >= 5 && !newAchievements.KNOWLEDGE_ARCHITECT.unlocked) {
+                    newAchievements.KNOWLEDGE_ARCHITECT.unlocked = true;
+                    newToasts.push({ id: Date.now() + 3, title: 'Achievement Unlocked!', message: newAchievements.KNOWLEDGE_ARCHITECT.name, icon: 'achievement' });
+                }
+                break;
             case 'DISCOVER_TREND':
                 if (payload.trendData) {
-                    const { velocity, impact } = payload.trendData;
-                    newVectors.memic += VECTOR_POINTS.MEMIC.DISCOVER_TREND;
-                    newVectors.memic += velocity * VECTOR_POINTS.MEMIC.TREND_VELOCITY_MULTIPLIER;
-                    newVectors.memic += impact * VECTOR_POINTS.MEMIC.TREND_IMPACT_MULTIPLIER;
+                    const { novelty, velocity, impact } = payload.trendData;
+                    const trendScore = novelty + velocity + impact;
+                    newMemic += VECTOR_POINTS.MEMIC.DISCOVER_TREND_BASE + (trendScore * VECTOR_POINTS.MEMIC.TREND_SCORE_MULTIPLIER);
                     
                     if (!newAchievements.TREND_SPOTTER.unlocked) {
                         newAchievements.TREND_SPOTTER.unlocked = true;
-                        newToasts.push({ id: Date.now() + 2, title: 'Achievement Unlocked!', message: newAchievements.TREND_SPOTTER.name, icon: 'achievement' });
+                        newToasts.push({ id: Date.now() + 4, title: 'Achievement Unlocked!', message: newAchievements.TREND_SPOTTER.name, icon: 'achievement' });
                     }
                     if (velocity >= 80 && !newAchievements.EXPONENTIAL_THINKER.unlocked) {
                         newAchievements.EXPONENTIAL_THINKER.unlocked = true;
-                        newToasts.push({ id: Date.now() + 3, title: 'Achievement Unlocked!', message: newAchievements.EXPONENTIAL_THINKER.name, icon: 'achievement' });
+                        newToasts.push({ id: Date.now() + 5, title: 'Achievement Unlocked!', message: newAchievements.EXPONENTIAL_THINKER.name, icon: 'achievement' });
                     }
                 }
                 break;
-            case 'UPDATE_TRAJECTORY': {
-                const newLongevityScore = Math.max(0, (100 - payload.biologicalAge) * 10);
-                updatedState.longevityScore = newLongevityScore;
-                newVectors.cognitive = newLongevityScore; 
-                
-                if (payload.interventionEffect) newVectors.genetic += Math.round(payload.interventionEffect * VECTOR_POINTS.GENETIC.BIOMARKER_IMPROVEMENT_MULTIPLIER);
-                if (payload.isRadical) {
-                    newVectors.genetic += VECTOR_POINTS.GENETIC.RADICAL_INTERVENTION_BONUS;
-                    if (payload.cognitiveBoost) {
-                        newVectors.cognitive += payload.cognitiveBoost;
-                    }
-                    if (!newAchievements.TRANSHUMANIST.unlocked) {
+            case 'APPLY_INTERVENTION': {
+                const intervention: (Intervention & { sophistication: number }) | undefined = payload?.intervention;
+                if (intervention) {
+                    newGenetic += VECTOR_POINTS.GENETIC.INTERVENTION_BASE * intervention.sophistication;
+                    if(intervention.type === 'radical' && !newAchievements.TRANSHUMANIST.unlocked) {
                         newAchievements.TRANSHUMANIST.unlocked = true;
-                        newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.TRANSHUMANIST.name, icon: 'achievement' });
+                        newToasts.push({ id: Date.now() + 6, title: 'Achievement Unlocked!', message: newAchievements.TRANSHUMANIST.name, icon: 'achievement' });
+                    }
+                     if(!newAchievements.BIO_STRATEGIST.unlocked) {
+                        newAchievements.BIO_STRATEGIST.unlocked = true;
+                        newToasts.push({ id: Date.now() + 7, title: 'Achievement Unlocked!', message: newAchievements.BIO_STRATEGIST.name, icon: 'achievement' });
                     }
                 }
                 break;
             }
+            case 'UPDATE_LONGEVITY_SCORE': {
+                 const newLongevityScore = Math.max(0, (100 - payload.biologicalAge) * 10);
+                 updatedState.longevityScore = newLongevityScore;
+            }
         }
         
+        // Recalculate Cognitive Bandwidth
+        // It's a function of stable processing time (longevity) and knowledge complexity (memic)
+        const newCognitive = Math.round(updatedState.longevityScore * (1 + Math.log1p(newMemic)));
+        
+        updatedState.vectors = { genetic: newGenetic, memic: newMemic, cognitive: newCognitive };
+        
+        // Check for Realm Ascension
         const currentRealmIndex = REALM_DEFINITIONS.findIndex(r => r.realm === updatedState.realm);
         const nextRealmDef = REALM_DEFINITIONS[currentRealmIndex + 1];
 
@@ -316,7 +343,7 @@ const App: React.FC = () => {
         }
         
         updatedState.achievements = newAchievements;
-        if (newToasts.length > 0) setToasts(prevToasts => [...prevToasts, ...newToasts]);
+        if (newToasts.length > 0) setToasts(prevToasts => [...prevToasts, ...newToasts.filter(t => t.id > ((prevToasts[prevToasts.length - 1])?.id || 0))]);
         
         return updatedState;
     });
@@ -436,7 +463,6 @@ const App: React.FC = () => {
     const isNewTopic = !exploredTopics.has(topic);
     if (isNewTopic) {
         setExploredTopics(prev => new Set(prev).add(topic));
-        updateAscensionState('NEW_TOPIC');
         if (Array.from(exploredTopics).length + 1 >= 3) {
             setOdysseyState(prev => {
                 if (!prev.achievements.HALLMARK_EXPLORER.unlocked) {
@@ -468,22 +494,11 @@ const App: React.FC = () => {
 
       // Memic point updates
       updateAscensionState('DISPATCH_AGENT');
-      if (!odysseyState.achievements.FIRST_RESEARCH.unlocked) {
-            setOdysseyState(prev => {
-                setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Budding Scientist", icon: 'achievement' }]);
-                return {...prev, achievements: {...prev.achievements, FIRST_RESEARCH: {...prev.achievements.FIRST_RESEARCH, unlocked: true}}};
-            });
-      }
-
+      
       if (response.knowledgeGraph) {
           const nodesAdded = newWorkspace.knowledgeGraph!.nodes.length - (previousWorkspace?.knowledgeGraph?.nodes.length || 0);
-          updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
-          if (newWorkspace.knowledgeGraph!.nodes.length >= 5 && !odysseyState.achievements.KNOWLEDGE_ARCHITECT.unlocked) {
-                setOdysseyState(prev => {
-                    setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Knowledge Architect", icon: 'achievement' }]);
-                    return {...prev, achievements: {...prev.achievements, KNOWLEDGE_ARCHITECT: {...prev.achievements.KNOWLEDGE_ARCHITECT, unlocked: true}}};
-                });
-          }
+          const edgesAdded = newWorkspace.knowledgeGraph!.edges.length - (previousWorkspace?.knowledgeGraph?.edges.length || 0);
+          updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded, edgesAdded, totalNodes: newWorkspace.knowledgeGraph!.nodes.length });
       }
       response.items.forEach(item => {
         if (item.type === 'trend' && item.trendData) {
@@ -503,7 +518,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [topic, model, quantization, apiKey, device, searchSources, addLog, workspaceHistory, odysseyState.achievements, exploredTopics, updateAscensionState]);
+  }, [topic, model, quantization, apiKey, device, searchSources, addLog, workspaceHistory, exploredTopics, updateAscensionState]);
   
   const handleSynthesize = useCallback(async () => {
     const currentWorkspace = workspaceHistory[timeLapseIndex];
@@ -523,20 +538,14 @@ const App: React.FC = () => {
             return newHistory;
         });
 
-        updateAscensionState('SYNTHESIZE');
-        if (!odysseyState.achievements.SYNTHESIZER.unlocked) {
-            setOdysseyState(prev => {
-                setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "The Synthesizer", icon: 'achievement' }]);
-                return {...prev, achievements: {...prev.achievements, SYNTHESIZER: {...prev.achievements.SYNTHESIZER, unlocked: true}}};
-            });
-        }
+        updateAscensionState('SYNTHESIZE', { itemCount: currentWorkspace.items.length });
         
         // After synthesis, if no trajectory state exists, initialize it.
         if (!trajectoryState) {
             const initialState = getInitialTrajectory();
             setTrajectoryState(initialState);
             const biologicalAge = initialState.overallScore.projection[0].value;
-            updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge });
+            updateAscensionState('UPDATE_LONGEVITY_SCORE', { biologicalAge });
              if (initialState.overallScore.projection[0].value <= 45 && !odysseyState.achievements.SCORE_MILESTONE_1.unlocked) { // This condition is based on Longevity Score > 550
                 setOdysseyState(prev => {
                     setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Longevity Adept", icon: 'achievement' }]);
@@ -559,30 +568,13 @@ const App: React.FC = () => {
     setTrajectoryState(newState);
     
     // Odyssey update
-    if (interventionId) {
-        const intervention = INTERVENTIONS.find(i => i.id === interventionId)!;
-        const oldBioAge = trajectoryState?.overallScore.projection[0].value || 100;
-        const newBioAge = newState.overallScore.interventionProjection![0].value;
-        const interventionEffect = (oldBioAge - newBioAge) / oldBioAge;
-
-        updateAscensionState('UPDATE_TRAJECTORY', { 
-            biologicalAge: newBioAge, 
-            interventionEffect: interventionEffect, 
-            isRadical: intervention.type === 'radical',
-            cognitiveBoost: intervention.effects.cognitive || 0
-        });
-
-        if (!odysseyState.achievements.BIO_STRATEGIST.unlocked) {
-            setOdysseyState(prev => {
-                setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Bio-Strategist", icon: 'achievement' }]);
-                return {...prev, achievements: {...prev.achievements, BIO_STRATEGIST: {...prev.achievements.BIO_STRATEGIST, unlocked: true}}};
-            });
-        }
-    } else {
-        // Resetting to baseline
-        const baseBioAge = newState.overallScore.projection[0].value;
-        updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: baseBioAge, interventionEffect: 0, isRadical: false });
+    const intervention = interventionId ? INTERVENTIONS.find(i => i.id === interventionId) : null;
+    if (intervention) {
+        updateAscensionState('APPLY_INTERVENTION', { intervention });
     }
+    
+    const newBioAge = newState.overallScore.interventionProjection?.[0].value ?? newState.overallScore.projection[0].value;
+    updateAscensionState('UPDATE_LONGEVITY_SCORE', { biologicalAge: newBioAge });
     
     addLog(`Applied intervention: ${interventionId || 'None'}`);
   };

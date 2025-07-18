@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { OdysseyState, Realm } from '../types';
-import { TrophyIcon, DnaIcon, MemicIcon, CognitiveIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon } from './icons';
+import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon } from './icons';
 import { REALM_DEFINITIONS } from '../constants';
 
 const AchievementCard: React.FC<{ achievement: OdysseyState['achievements'][string] }> = ({ achievement }) => {
@@ -59,7 +59,7 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState }> = ({ odysseyState }) 
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${isCurrent ? 'bg-purple-500 border-purple-300 scale-110' : isUnlocked ? 'bg-slate-600 border-slate-500' : 'bg-slate-800 border-slate-700'}`}>
                                     <RealmIcon className={`h-6 w-6 ${isUnlocked ? 'text-slate-100' : 'text-slate-500'}`} />
                                 </div>
-                                <div className="absolute bottom-full mb-2 w-56 p-3 text-left bg-slate-900 border border-slate-600 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
+                                <div className="absolute bottom-full mb-2 w-64 p-3 text-left bg-slate-900 border border-slate-600 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
                                     <h4 className="font-bold text-slate-100 text-center">{def.realm}</h4>
                                     <p className="text-xs text-slate-400 mt-1 mb-2 text-center">{def.description}</p>
                                     <div className="mt-2 pt-2 border-t border-slate-700">
@@ -91,9 +91,9 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState }> = ({ odysseyState }) 
                             <>
                                 <h4 className="text-center font-semibold text-slate-300 mb-3">Progress to: <span className="text-purple-300">{REALM_DEFINITIONS[currentRealmIndex + 1].realm}</span></h4>
                                 <div className="flex items-start justify-around gap-3">
-                                    <VectorDisplay icon={<DnaIcon />} label="Genetic" value={odysseyState.vectors.genetic} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.genetic} color="text-teal-400" progress={(odysseyState.vectors.genetic / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.genetic) * 100} />
-                                    <VectorDisplay icon={<MemicIcon />} label="Memic" value={odysseyState.vectors.memic} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.memic} color="text-blue-400" progress={(odysseyState.vectors.memic / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.memic) * 100}/>
-                                    <VectorDisplay icon={<CognitiveIcon />} label="Cognitive" value={odysseyState.vectors.cognitive} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.cognitive} color="text-yellow-400" progress={(odysseyState.vectors.cognitive / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.cognitive) * 100}/>
+                                    <VectorDisplay icon={<GeneticIcon />} label="Bio Control" value={odysseyState.vectors.genetic} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.genetic} color="text-teal-400" progress={(odysseyState.vectors.genetic / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.genetic) * 100} />
+                                    <VectorDisplay icon={<MemicIcon />} label="Knowledge" value={odysseyState.vectors.memic} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.memic} color="text-blue-400" progress={(odysseyState.vectors.memic / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.memic) * 100}/>
+                                    <VectorDisplay icon={<CognitiveBandwidthIcon />} label="Cognition" value={odysseyState.vectors.cognitive} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.cognitive} color="text-yellow-400" progress={(odysseyState.vectors.cognitive / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.cognitive) * 100}/>
                                 </div>
                             </>
                         ) : (
