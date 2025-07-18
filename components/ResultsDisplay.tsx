@@ -1,5 +1,6 @@
 
 
+
 import React from 'react';
 import { type WorkspaceState, type WorkspaceItem, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
@@ -8,7 +9,10 @@ import TrajectoryView from './TrajectoryView';
 import KnowledgeGraphView from './KnowledgeGraphView';
 
 interface WorkspaceViewProps {
-  workspace: WorkspaceState | null;
+  workspace: WorkspaceState | undefined;
+  workspaceHistory: WorkspaceState[];
+  timeLapseIndex: number;
+  onTimeLapseChange: (index: number) => void;
   isLoading: boolean;
   error: string | null;
   hasSearched: boolean;
@@ -117,13 +121,14 @@ const AutonomousStatusIndicator: React.FC<{ isLoading: boolean }> = ({ isLoading
 );
 
 
-const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, trajectoryState, onApplyIntervention, loadingMessage, isAutonomousMode, isAutonomousLoading }) => {
+const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHistory, timeLapseIndex, onTimeLapseChange, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, trajectoryState, onApplyIntervention, loadingMessage, isAutonomousMode, isAutonomousLoading }) => {
   if (isLoading && !workspace) {
     return <LoadingSpinner message={loadingMessage} />;
   }
   
   const trendItems = workspace?.items.filter(i => i.type === 'trend') ?? [];
   const otherItems = workspace?.items.filter(i => i.type !== 'trend') ?? [];
+  const snapshotTimestamp = workspace ? new Date(workspace.timestamp).toLocaleString() : 'N/A';
 
   return (
     <div className="w-full max-w-5xl mx-auto p-4 space-y-8">
@@ -145,14 +150,14 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
         </div>
       )}
       
-      {hasSearched && workspace && workspace.items.length === 0 && !isLoading && (
+      {hasSearched && workspaceHistory.length > 0 && workspace && workspace.items.length === 0 && !isLoading && (
         <div className="text-center py-12">
             <h2 className="text-xl font-semibold text-slate-400">No Data Yet for "{workspace.topic}"</h2>
             <p className="text-slate-500 mt-2">Dispatch an agent using the panel above to populate your workspace.</p>
         </div>
       )}
 
-      {hasSearched && workspace && (
+      {hasSearched && workspaceHistory.length > 0 && workspace && (
         <>
           {/* Trend Items Section */}
            {trendItems.length > 0 && (
@@ -215,10 +220,22 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                 <p className="text-slate-400 text-center sm:text-left mb-2">
                     This interactive graph visualizes the conceptual relationships in your workspace, representing an embedding of the topic. Drag nodes to explore the network.
                 </p>
-                <div className="flex justify-center items-center gap-4 mb-4">
-                    <label htmlFor="time-lapse-slider" className="text-sm text-slate-400">Time-Lapse:</label>
-                    <input type="range" id="time-lapse-slider" disabled className="w-48" />
-                    <span className="text-xs text-slate-500 bg-slate-700 px-2 py-1 rounded">Coming Soon</span>
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
+                    <label htmlFor="time-lapse-slider" className="text-sm text-slate-400 self-center">Time-Lapse:</label>
+                    <input
+                        type="range"
+                        id="time-lapse-slider"
+                        min="0"
+                        max={workspaceHistory.length > 0 ? workspaceHistory.length - 1 : 0}
+                        value={timeLapseIndex}
+                        onChange={(e) => onTimeLapseChange(parseInt(e.target.value, 10))}
+                        disabled={workspaceHistory.length <= 1}
+                        className="w-48 self-center"
+                        aria-label="Time-Lapse Slider"
+                    />
+                    <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded-md self-center min-w-[170px] text-center">
+                        {workspaceHistory.length > 0 ? snapshotTimestamp : 'No snapshots yet'}
+                    </span>
                 </div>
                 <div className="w-full h-[500px] bg-slate-800/40 rounded-lg overflow-hidden relative border border-slate-700">
                      <KnowledgeGraphView graph={workspace.knowledgeGraph} />

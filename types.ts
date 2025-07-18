@@ -1,5 +1,6 @@
 
 
+
 export type HuggingFaceDevice = 'wasm' | 'webgpu';
 
 export enum SearchType {
@@ -77,6 +78,7 @@ export interface WorkspaceState {
   sources: GroundingSource[];
   knowledgeGraph: KnowledgeGraph | null;
   synthesis: string | null;
+  timestamp: number;
 }
 
 // The API response is now more modular

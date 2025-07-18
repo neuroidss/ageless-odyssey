@@ -1,7 +1,8 @@
 
 
+
 import React, { useState, useCallback, useEffect } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { 
@@ -35,13 +36,47 @@ const getInitialGamificationState = (): GamificationState => {
   };
 };
 
+const createNextWorkspaceState = (
+    currentTopic: string,
+    previousState: WorkspaceState | null,
+    agentResponse: AgentResponse
+): WorkspaceState => {
+    const baseWorkspace = previousState || { topic: currentTopic, items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null, timestamp: 0 };
+    
+    const newItems = agentResponse.items.filter((newItem: any) => !baseWorkspace.items.some(existing => existing.id === newItem.id));
+    const newSources = agentResponse.sources?.filter((newSrc: any) => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
+    
+    let newGraph = baseWorkspace.knowledgeGraph;
+    if (agentResponse.knowledgeGraph) {
+        const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id) || []);
+        const newNodes = agentResponse.knowledgeGraph.nodes.filter((n: any) => !existingNodeIds.has(n.id));
+        const existingEdgeIds = new Set(baseWorkspace.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
+        const newEdges = agentResponse.knowledgeGraph.edges.filter((e: any) => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
+        newGraph = {
+            nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
+            edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
+        };
+    }
+
+    return {
+        topic: currentTopic,
+        items: [...baseWorkspace.items, ...newItems],
+        sources: [...baseWorkspace.sources, ...newSources],
+        knowledgeGraph: newGraph,
+        synthesis: baseWorkspace.synthesis,
+        timestamp: Date.now()
+    };
+};
+
+
 const App: React.FC = () => {
   const [topic, setTopic] = useState<string>('');
   const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS.find(m => m.id === 'gemini-2.5-flash') || SUPPORTED_MODELS[0]);
   const [quantization, setQuantization] = useState<string>(DEFAULT_HUGGING_FACE_QUANTIZATION);
   const [device, setDevice] = useState<HuggingFaceDevice>(DEFAULT_HUGGING_FACE_DEVICE);
   
-  const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
+  const [workspaceHistory, setWorkspaceHistory] = useState<WorkspaceState[]>([]);
+  const [timeLapseIndex, setTimeLapseIndex] = useState<number>(0);
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -95,7 +130,10 @@ const App: React.FC = () => {
             setModel(savedModel);
             if (savedState.quantization) setQuantization(savedState.quantization);
             if (savedState.device) setDevice(savedState.device);
-            if (savedState.workspace) setWorkspace(savedState.workspace);
+            if (savedState.workspaceHistory && savedState.workspaceHistory.length > 0) {
+              setWorkspaceHistory(savedState.workspaceHistory);
+              setTimeLapseIndex(savedState.workspaceHistory.length - 1);
+            }
             if (savedState.hasSearched) setHasSearched(savedState.hasSearched);
             if (savedState.trajectoryState) setTrajectoryState(savedState.trajectoryState);
             if (savedState.gamification) setGamification(savedState.gamification);
@@ -125,14 +163,14 @@ const App: React.FC = () => {
   // Save state to localStorage whenever it changes
   useEffect(() => {
     // Avoid saving the initial blank state on first load
-    if (!hasSearched && !workspace && !topic && !isAutonomousMode) {
+    if (!hasSearched && workspaceHistory.length === 0 && !topic && !isAutonomousMode) {
         return;
     }
 
     try {
         const stateToSave = {
             topic, model, quantization, device,
-            workspace, hasSearched, trajectoryState, gamification,
+            workspaceHistory, hasSearched, trajectoryState, gamification,
             exploredTopics: Array.from(exploredTopics),
             isAutonomousMode, agentBudget, agentCallsMade,
         };
@@ -140,7 +178,7 @@ const App: React.FC = () => {
     } catch (error) {
         addLog(`Error saving state to localStorage: ${error}`);
     }
-  }, [topic, model, quantization, device, workspace, hasSearched, trajectoryState, gamification, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade]);
+  }, [topic, model, quantization, device, workspaceHistory, hasSearched, trajectoryState, gamification, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade]);
 
 
   const handleApiKeyChange = (key: string) => {
@@ -223,34 +261,6 @@ const App: React.FC = () => {
     });
   }, []);
   
-  const mergeAgentResponse = useCallback((response: any) => {
-    setWorkspace(prev => {
-        const baseWorkspace = prev || { topic: '', items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null };
-        const newItems = response.items.filter((newItem: any) => !baseWorkspace.items.some(existing => existing.id === newItem.id));
-        const newSources = response.sources?.filter((newSrc: any) => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
-        
-        let newGraph = baseWorkspace.knowledgeGraph;
-        if (response.knowledgeGraph) {
-            const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id) || []);
-            const newNodes = response.knowledgeGraph.nodes.filter((n: any) => !existingNodeIds.has(n.id));
-            const existingEdgeIds = new Set(baseWorkspace.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
-            const newEdges = response.knowledgeGraph.edges.filter((e: any) => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
-            newGraph = {
-                nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
-                edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
-            };
-        }
-        
-        return {
-            topic: baseWorkspace.topic,
-            items: [...baseWorkspace.items, ...newItems],
-            sources: [...baseWorkspace.sources, ...newSources],
-            knowledgeGraph: newGraph,
-            synthesis: baseWorkspace.synthesis
-        };
-      });
-  }, []);
-
   // Effect for Autonomous Agent
   useEffect(() => {
     if (!isAutonomousMode) return;
@@ -274,41 +284,11 @@ const App: React.FC = () => {
         
         if (response.items.length > 0) {
             setHasSearched(prev => prev ? prev : true);
-
-            setWorkspace(prev => {
-                if (!prev) {
-                    // If workspace is empty, initialize it.
-                    return {
-                        topic: AUTONOMOUS_AGENT_QUERY,
-                        items: response.items || [],
-                        sources: response.sources || [],
-                        knowledgeGraph: response.knowledgeGraph || { nodes: [], edges: [] },
-                        synthesis: null
-                    };
-                }
-                // If workspace exists, merge into it.
-                const newItems = response.items.filter((newItem: any) => !prev.items.some(existing => existing.id === newItem.id));
-                const newSources = response.sources?.filter((newSrc: any) => !prev.sources.some(existing => existing.uri === newSrc.uri)) ?? [];
-                
-                let newGraph = prev.knowledgeGraph;
-                if (response.knowledgeGraph) {
-                    const existingNodeIds = new Set(prev.knowledgeGraph?.nodes.map(n => n.id) || []);
-                    const newNodes = response.knowledgeGraph.nodes.filter((n: any) => !existingNodeIds.has(n.id));
-                    const existingEdgeIds = new Set(prev.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
-                    const newEdges = response.knowledgeGraph.edges.filter((e: any) => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
-                    newGraph = {
-                        nodes: [...(prev.knowledgeGraph?.nodes || []), ...newNodes],
-                        edges: [...(prev.knowledgeGraph?.edges || []), ...newEdges],
-                    };
-                }
-                
-                return {
-                    ...prev,
-                    items: [...prev.items, ...newItems],
-                    sources: [...prev.sources, ...newSources],
-                    knowledgeGraph: newGraph,
-                };
-            });
+            const lastWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
+            const newWorkspace = createNextWorkspaceState(AUTONOMOUS_AGENT_QUERY, lastWorkspace, response);
+            
+            setWorkspaceHistory(prev => [...prev, newWorkspace]);
+            setTimeLapseIndex(workspaceHistory.length);
 
             response.items.forEach(item => {
                 if (item.type === 'trend' && item.trendData) {
@@ -335,7 +315,7 @@ const App: React.FC = () => {
         addLog("[Autonomous] Mode deactivated. Interval cleared.");
       }
     };
-  }, [isAutonomousMode, agentBudget, agentCallsMade, model, quantization, apiKey, device, addLog, updateAscensionState]);
+  }, [isAutonomousMode, agentBudget, agentCallsMade, model, quantization, apiKey, device, addLog, updateAscensionState, workspaceHistory]);
 
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
@@ -353,25 +333,28 @@ const App: React.FC = () => {
     setLoadingMessage('Dispatching Agent...');
     if (!hasSearched) setHasSearched(true);
     
-    const currentWorkspace = workspace || { topic, items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null };
+    const lastWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
 
     try {
       const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device, setLoadingMessage);
       addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
       
+      const newWorkspace = createNextWorkspaceState(topic, lastWorkspace, response);
+      
       response.items.forEach(item => {
           if (item.type === 'trend' && item.trendData) updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
       });
-      if (response.knowledgeGraph && response.knowledgeGraph.nodes.length > (currentWorkspace.knowledgeGraph?.nodes.length ?? 0)) {
-           if (!gamification.achievements.KNOWLEDGE_ARCHITECT.unlocked && response.knowledgeGraph.nodes.length >= 5) {
+      if (newWorkspace.knowledgeGraph && newWorkspace.knowledgeGraph.nodes.length > (lastWorkspace?.knowledgeGraph?.nodes.length ?? 0)) {
+           if (!gamification.achievements.KNOWLEDGE_ARCHITECT.unlocked && newWorkspace.knowledgeGraph.nodes.length >= 5) {
               setGamification(prev => ({...prev, achievements: {...prev.achievements, KNOWLEDGE_ARCHITECT: {...prev.achievements.KNOWLEDGE_ARCHITECT, unlocked: true}}}));
               setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Knowledge Architect", icon: 'achievement'}]);
           }
-          const nodesAdded = response.knowledgeGraph.nodes.length - (currentWorkspace.knowledgeGraph?.nodes.length ?? 0);
+          const nodesAdded = newWorkspace.knowledgeGraph.nodes.length - (lastWorkspace?.knowledgeGraph?.nodes.length ?? 0);
           if (nodesAdded > 0) updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
       }
 
-      mergeAgentResponse(response);
+      setWorkspaceHistory(prev => [...prev, newWorkspace]);
+      setTimeLapseIndex(workspaceHistory.length);
 
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'An unknown agent error occurred.';
@@ -385,12 +368,13 @@ const App: React.FC = () => {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [topic, model, quantization, device, apiKey, hasSearched, workspace, updateAscensionState, addLog, gamification.achievements, mergeAgentResponse]);
+  }, [topic, model, quantization, device, apiKey, hasSearched, workspaceHistory, updateAscensionState, addLog, gamification.achievements]);
 
   const handleSynthesize = useCallback(async () => {
-    if (!workspace?.items || workspace.items.length === 0) return;
+    const currentWorkspace = workspaceHistory[timeLapseIndex];
+    if (!currentWorkspace?.items || currentWorkspace.items.length === 0) return;
 
-    addLog(`Synthesizing findings for "${workspace.topic}"...`);
+    addLog(`Synthesizing findings for "${currentWorkspace.topic}"...`);
     updateAscensionState('SYNTHESIZE');
     if (!gamification.achievements.SYNTHESIZER.unlocked) {
         setGamification(prev => ({...prev, achievements: {...prev.achievements, SYNTHESIZER: {...prev.achievements.SYNTHESIZER, unlocked: true}}}));
@@ -399,12 +383,25 @@ const App: React.FC = () => {
     
     setIsSynthesizing(true);
     setSynthesisError(null);
-    setWorkspace(prev => prev ? {...prev, synthesis: null} : null);
+    setWorkspaceHistory(prev => {
+      const newHistory = [...prev];
+      if (newHistory[timeLapseIndex]) {
+        newHistory[timeLapseIndex] = {...newHistory[timeLapseIndex], synthesis: null};
+      }
+      return newHistory;
+    });
+
 
     try {
-      const response = await synthesizeFindings(workspace.topic || topic, workspace.items, model, quantization, addLog, apiKey, device);
+      const response = await synthesizeFindings(currentWorkspace.topic || topic, currentWorkspace.items, model, quantization, addLog, apiKey, device);
       addLog('Synthesis complete.');
-      setWorkspace(prev => prev ? {...prev, synthesis: response} : null);
+      setWorkspaceHistory(prev => {
+        const newHistory = [...prev];
+        if (newHistory[timeLapseIndex]) {
+          newHistory[timeLapseIndex] = {...newHistory[timeLapseIndex], synthesis: response};
+        }
+        return newHistory;
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'An unknown error occurred during synthesis.';
       addLog(`ERROR during synthesis: ${msg}`);
@@ -412,7 +409,7 @@ const App: React.FC = () => {
     } finally {
       setIsSynthesizing(false);
     }
-  }, [workspace, topic, model, quantization, device, updateAscensionState, addLog, apiKey, gamification.achievements]);
+  }, [workspaceHistory, timeLapseIndex, topic, model, quantization, device, updateAscensionState, addLog, apiKey, gamification.achievements]);
   
     const handleTopicChange = (newTopic: string) => {
         setTopic(newTopic);
@@ -508,8 +505,11 @@ const App: React.FC = () => {
         />
         <div className="mt-4">
           <WorkspaceView
-            workspace={workspace}
-            isLoading={isLoading && !hasSearched}
+            workspace={workspaceHistory[timeLapseIndex]}
+            workspaceHistory={workspaceHistory}
+            timeLapseIndex={timeLapseIndex}
+            onTimeLapseChange={setTimeLapseIndex}
+            isLoading={isLoading && workspaceHistory.length === 0}
             loadingMessage={loadingMessage}
             error={error}
             hasSearched={hasSearched}
