@@ -70,8 +70,17 @@ class HuggingFacePipelineManager {
                 model: string,
                 options: any,
             ) => Promise<TextGenerationPipeline>;
-
-            this.instance = await createTextGenerationPipeline(this.task, modelId, pipelineOptions);
+            
+            try {
+                this.instance = await createTextGenerationPipeline(this.task, modelId, pipelineOptions);
+            } catch (e) {
+                 if (e instanceof Error && (e.message.includes('VK_ERROR_OUT_OF_DEVICE_MEMORY') || e.message.toLowerCase().includes('out of memory'))) {
+                     const enhancedMessage = "WebGPU ran out of memory while loading the model. Your device may not have enough VRAM. Please try switching the 'Execution Device' to 'wasm' in the Advanced Settings.";
+                     addLog(`[HuggingFace v3] OOM ERROR: ${enhancedMessage}`);
+                     throw new Error(enhancedMessage);
+                }
+                throw e; // rethrow other errors
+            }
             
             addLog(`[HuggingFace v3] Model '${modelId}' is fully loaded and ready.`);
         }
@@ -155,6 +164,11 @@ export const generateTextWithHuggingFace = async (
         let errorMessage = 'An unknown error occurred';
         if (error instanceof Error) {
             errorMessage = error.message;
+            if (errorMessage.includes('VK_ERROR_OUT_OF_DEVICE_MEMORY') || errorMessage.toLowerCase().includes('out of memory')) {
+                const enhancedMessage = "WebGPU ran out of memory during text generation. The model and prompt may be too large for your device's VRAM. Please try switching the 'Execution Device' to 'wasm' in the Advanced Settings.";
+                addLog(`[HuggingFace v3] OOM ERROR: ${enhancedMessage}`);
+                throw new Error(enhancedMessage);
+            }
         }
         addLog(`[HuggingFace v3] FATAL ERROR: Failed to run model '${modelId}'. ${errorMessage}`);
         throw new Error(`Failed to generate text with Hugging Face model: ${errorMessage}`);

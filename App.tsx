@@ -110,7 +110,7 @@ const App: React.FC = () => {
       setDebugLog(prev => [finalMessage, ...prev].slice(0, 100));
   }, []);
 
-  // --- State Persistence ---
+  // Check for WebGPU support and fall back if necessary
   useEffect(() => {
     async function checkGpuFeatures() {
         if (navigator.gpu) {
@@ -118,19 +118,25 @@ const App: React.FC = () => {
                 const adapter = await navigator.gpu.requestAdapter();
                 if (adapter) {
                     setGpuFeatures(adapter.features);
-                    addLog(`[GPU Check] WebGPU supported features: ${Array.from(adapter.features).join(', ')}`);
+                    addLog(`[GPU Check] WebGPU adapter found. Supported features: ${Array.from(adapter.features).join(', ')}`);
                     if (!adapter.features.has('shader-f16')) {
                          addLog(`[GPU Check] WARN: This device/browser does not support 'shader-f16'. Quantizations using f16 (fp16, q4f16) will be disabled for WebGPU.`);
                     }
                 } else {
-                    addLog('[GPU Check] WebGPU supported, but no adapter found. Could be due to power settings or OS restrictions.');
+                    addLog('[GPU Check] WebGPU is supported, but no suitable adapter was found. This can happen on multi-GPU systems or due to power-saving settings.');
+                    setDevice('wasm');
+                    addLog('[GPU Check] Automatically falling back to WASM device for stability.');
                 }
             } catch (e) {
                 const message = e instanceof Error ? e.message : String(e);
                 addLog(`[GPU Check] Error requesting WebGPU adapter: ${message}`);
+                setDevice('wasm');
+                addLog('[GPU Check] Error during adapter request. Automatically falling back to WASM device for stability.');
             }
         } else {
             addLog('[GPU Check] WebGPU API not found in this browser.');
+            setDevice('wasm');
+            addLog('[GPU Check] Automatically falling back to WASM device.');
         }
     }
     checkGpuFeatures();

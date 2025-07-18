@@ -1,5 +1,4 @@
 
-
 export interface SearchResult {
     title: string;
     link: string;
@@ -18,7 +17,7 @@ export const searchDuckDuckGo = async (query: string, addLog: (message: string) 
     const ddgHtmlUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     
     // Using a CORS proxy to allow the request from the browser.
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(ddgHtmlUrl)}`;
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(ddgHtmlUrl)}`;
     
     addLog(`[Search] Querying DDG HTML via CORS proxy for: "${query}"`);
 
@@ -30,12 +29,11 @@ export const searchDuckDuckGo = async (query: string, addLog: (message: string) 
             throw new Error(`CORS proxy request failed with status ${proxyResponse.status}`);
         }
 
-        const proxyData = await proxyResponse.json();
-        const htmlContent = proxyData.contents;
+        const htmlContent = await proxyResponse.text();
 
         if (!htmlContent) {
-            addLog(`[Search] ERROR: CORS proxy response did not contain 'contents'. Raw proxy response: ${JSON.stringify(proxyData).substring(0, 500)}`);
-            throw new Error("Invalid response structure from CORS proxy.");
+            addLog(`[Search] ERROR: CORS proxy response did not contain content.`);
+            throw new Error("Invalid response from CORS proxy.");
         }
         
         addLog(`[Search] Received HTML content from proxy. Length: ${htmlContent.length}. Parsing results...`);

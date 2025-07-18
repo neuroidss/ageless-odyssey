@@ -6,19 +6,20 @@ export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] =
     { label: 'wasm', value: 'wasm' },
     { label: 'webgpu', value: 'webgpu' },
 ];
-export const DEFAULT_HUGGING_FACE_DEVICE: HuggingFaceDevice = 'wasm';
+export const DEFAULT_HUGGING_FACE_DEVICE: HuggingFaceDevice = 'webgpu';
 
 export const HUGGING_FACE_QUANTIZATIONS: {label: string, value: string}[] = [
-//    { label: '', value: '' }, // just model.onnx without _prefix
-    { label: 'bnb4', value: 'bnb4' },
+    { label: 'auto', value: 'auto' },
+    { label: 'fp32', value: 'fp32' },
     { label: 'fp16', value: 'fp16' },
+    { label: 'q8', value: 'q8' },
     { label: 'int8', value: 'int8' },
-    { label: 'q4', value: 'q4' },
-    { label: 'q4f16', value: 'q4f16' },
-    { label: 'quantized', value: 'quantized' },
     { label: 'uint8', value: 'uint8' },
+    { label: 'q4', value: 'q4' },
+    { label: 'bnb4', value: 'bnb4' },
+    { label: 'q4f16', value: 'q4f16' },
 ];
-export const DEFAULT_HUGGING_FACE_QUANTIZATION: string = 'int8';
+export const DEFAULT_HUGGING_FACE_QUANTIZATION: string = 'auto';
 
 export const EXAMPLE_TOPICS = [
     "Telomere shortening",
@@ -36,6 +37,7 @@ export const DEFAULT_AGENT_BUDGET = 10;
 
 export const SUPPORTED_MODELS: ModelDefinition[] = [
     // Hugging Face Transformers.js (runs in-browser)
+    { id: 'onnx-community/gemma-3-1b-it-ONNX', name: 'gemma-3-1b-it-ONNX (HF)', provider: ModelProvider.HuggingFace },
     { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B (HF)', provider: ModelProvider.HuggingFace },
     { id: 'onnx-community/gemma-3n-E2B-it-ONNX', name: 'Gemma 3N E2B (HF)', provider: ModelProvider.HuggingFace },
     { id: 'onnx-community/Qwen3-4B-ONNX', name: 'Qwen3-4B (HF)', provider: ModelProvider.HuggingFace },
