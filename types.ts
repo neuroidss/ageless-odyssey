@@ -41,7 +41,8 @@ export type HuggingFaceDevice = 'wasm' | 'webgpu';
 
 export enum SearchDataSource {
   PubMed = "PubMed",
-  BioRxivRAG = "bioRxiv (RAG)",
+  BioRxivRAG = "bioRxiv (RSS/RAG)",
+  BioRxivText = "bioRxiv (Text Search)",
   GooglePatents = "Google Patents",
   WebSearch = "Web Search",
   OpenGenes = "OpenGenes",

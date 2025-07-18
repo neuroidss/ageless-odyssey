@@ -97,7 +97,7 @@ const App: React.FC = () => {
 
 
   // --- Search Source State ---
-  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.GooglePatents, SearchDataSource.OpenGenes]);
+  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.PubMed, SearchDataSource.BioRxivText, SearchDataSource.GooglePatents, SearchDataSource.OpenGenes]);
 
 
   // --- Autonomous Mode State ---

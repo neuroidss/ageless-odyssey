@@ -219,6 +219,49 @@ const searchBioRxivRAG = async (query: string, addLog: (message: string) => void
 };
 
 /**
+ * Searches bioRxiv via its full-text search interface.
+ */
+const searchBioRxivText = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+    const url = `https://www.biorxiv.org/search/${encodeURIComponent(query)}`;
+    const results: SearchResult[] = [];
+    try {
+        const response = await fetchWithProxy(url, addLog);
+        const htmlContent = await response.text();
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        const resultElements = doc.querySelectorAll('ul.highwire-search-results-list > li.search-result');
+
+        resultElements.forEach(el => {
+            const titleLink = el.querySelector<HTMLAnchorElement>('a.highwire-cite-linked-title');
+            const authorsEl = el.querySelector('.highwire-cite-authors');
+            const metadataEl = el.querySelector('.highwire-cite-metadata');
+
+            if (titleLink) {
+                const href = titleLink.getAttribute('href');
+                if (href) {
+                    const link = new URL(href, 'https://www.biorxiv.org').toString();
+                    const title = titleLink.textContent?.trim() ?? 'No title';
+                    const authors = authorsEl?.textContent?.trim().replace(/\s+/g, ' ') ?? '';
+                    const metadata = metadataEl?.textContent?.trim().replace(/\s+/g, ' ') ?? '';
+                    
+                    results.push({
+                        link,
+                        title,
+                        snippet: `Authors: ${authors}. ${metadata}`,
+                        source: SearchDataSource.BioRxivText
+                    });
+                }
+            }
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`[Search.BioRxivText] Error searching bioRxiv: ${message}`);
+    }
+    return results.slice(0, 5); // Limit to top 5
+};
+
+/**
  * Searches Google Patents. Requires CORS proxy.
  */
 const searchGooglePatents = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
@@ -226,9 +269,14 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
     const results: SearchResult[] = [];
     try {
         const response = await fetchWithProxy(url, addLog);
-        // Response is JSONP-like, starts with ')]}'
         const rawText = await response.text();
-        const jsonText = rawText.substring(rawText.indexOf('{'));
+        
+        // Response is JSONP-like, starts with ')]}' or similar. Find the first '{'.
+        const firstBraceIndex = rawText.indexOf('{');
+        if (firstBraceIndex === -1) {
+            throw new Error(`No JSON object found in response. Body starts with: ${rawText.substring(0, 150)}`);
+        }
+        const jsonText = rawText.substring(firstBraceIndex);
         const data = JSON.parse(jsonText);
         
         const patents = data.results?.cluster?.[0]?.result || [];
@@ -253,7 +301,8 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
             }
         });
     } catch (error) {
-        addLog(`[Search.Patents] Error searching Google Patents: ${error}`);
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`[Search.Patents] Error searching Google Patents: ${message}`);
     }
     return results;
 };
@@ -298,6 +347,7 @@ export const performFederatedSearch = async (
         switch(source) {
             case SearchDataSource.PubMed: return searchPubMed(query, addLog);
             case SearchDataSource.BioRxivRAG: return searchBioRxivRAG(query, addLog);
+            case SearchDataSource.BioRxivText: return searchBioRxivText(query, addLog);
             case SearchDataSource.GooglePatents: return searchGooglePatents(query, addLog);
             case SearchDataSource.WebSearch: return searchWeb(query, addLog);
             case SearchDataSource.OpenGenes:
