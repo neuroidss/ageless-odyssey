@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { OdysseyState, Realm } from '../types';
-import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon } from './icons';
-import { REALM_DEFINITIONS } from '../constants';
+import { OdysseyState, Realm, RealmDefinition } from '../types';
+import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon, OracleIcon } from './icons';
 
 const AchievementCard: React.FC<{ achievement: OdysseyState['achievements'][string] }> = ({ achievement }) => {
     return (
@@ -28,7 +27,7 @@ const VectorDisplay: React.FC<{ icon: React.ReactNode; label: string; value: num
     </div>
 );
 
-const realmIcons: Record<Realm, React.FC<{className?: string}>> = {
+const realmIcons: Record<string, React.FC<{className?: string}>> = {
     [Realm.MortalShell]: ShellIcon,
     [Realm.BiologicalOptimizer]: BiologicalOptimizerIcon,
     [Realm.SubstrateEnhanced]: SubstrateEnhancedIcon,
@@ -38,9 +37,18 @@ const realmIcons: Record<Realm, React.FC<{className?: string}>> = {
     [Realm.StellarMetamorph]: StellarMetamorphIcon,
 };
 
-const OdysseyMap: React.FC<{ odysseyState: OdysseyState }> = ({ odysseyState }) => {
+const OdysseyMap: React.FC<{ odysseyState: OdysseyState, dynamicRealmDefinitions: RealmDefinition[], isOracleLoading: boolean }> = ({ odysseyState, dynamicRealmDefinitions, isOracleLoading }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const currentRealmIndex = REALM_DEFINITIONS.findIndex(r => r.realm === odysseyState.realm);
+    
+    // Find index based on the dynamic list
+    const currentRealmIndex = dynamicRealmDefinitions.findIndex(r => r.realm === odysseyState.realm);
+    const currentRealmDef = dynamicRealmDefinitions[currentRealmIndex];
+    const nextRealmDef = dynamicRealmDefinitions[currentRealmIndex + 1];
+
+    // Fallback icon for dynamically generated realms
+    const getRealmIcon = (realmName: string) => {
+        return realmIcons[realmName] || AscensionIcon;
+    };
 
     return (
         <>
@@ -50,10 +58,10 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState }> = ({ odysseyState }) 
                 {/* Realm Progression Map */}
                 <div className="relative flex items-center justify-between w-full px-4 sm:px-8 py-4">
                     <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-700 -translate-y-1/2"></div>
-                    {REALM_DEFINITIONS.map((def, index) => {
+                    {dynamicRealmDefinitions.map((def, index) => {
                         const isCurrent = index === currentRealmIndex;
                         const isUnlocked = index <= currentRealmIndex;
-                        const RealmIcon = realmIcons[def.realm];
+                        const RealmIcon = getRealmIcon(def.realm);
                         return (
                              <div key={def.realm} className="relative z-10 flex flex-col items-center group">
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${isCurrent ? 'bg-purple-500 border-purple-300 scale-110' : isUnlocked ? 'bg-slate-600 border-slate-500' : 'bg-slate-800 border-slate-700'}`}>
@@ -83,19 +91,25 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState }> = ({ odysseyState }) 
                     <div className="text-center md:text-left">
                         <div className="text-sm text-purple-300 font-semibold tracking-wider">CURRENT REALM</div>
                         <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-500">{odysseyState.realm}</h3>
-                        <p className="text-xs text-slate-400 mt-1">{REALM_DEFINITIONS[currentRealmIndex].description}</p>
+                        <p className="text-xs text-slate-400 mt-1">{currentRealmDef?.description || 'A new state of being...'}</p>
                     </div>
                     
                     <div className="p-4 bg-slate-900/50 rounded-lg">
-                        {currentRealmIndex < REALM_DEFINITIONS.length - 1 ? (
+                        {nextRealmDef ? (
                             <>
-                                <h4 className="text-center font-semibold text-slate-300 mb-3">Progress to: <span className="text-purple-300">{REALM_DEFINITIONS[currentRealmIndex + 1].realm}</span></h4>
+                                <h4 className="text-center font-semibold text-slate-300 mb-3">Progress to: <span className="text-purple-300">{nextRealmDef.realm}</span></h4>
                                 <div className="flex items-start justify-around gap-3">
-                                    <VectorDisplay icon={<GeneticIcon />} label="Bio Control" value={odysseyState.vectors.genetic} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.genetic} color="text-teal-400" progress={(odysseyState.vectors.genetic / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.genetic) * 100} />
-                                    <VectorDisplay icon={<MemicIcon />} label="Knowledge" value={odysseyState.vectors.memic} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.memic} color="text-blue-400" progress={(odysseyState.vectors.memic / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.memic) * 100}/>
-                                    <VectorDisplay icon={<CognitiveBandwidthIcon />} label="Cognition" value={odysseyState.vectors.cognitive} required={REALM_DEFINITIONS[currentRealmIndex+1].thresholds.cognitive} color="text-yellow-400" progress={(odysseyState.vectors.cognitive / REALM_DEFINITIONS[currentRealmIndex+1].thresholds.cognitive) * 100}/>
+                                    <VectorDisplay icon={<GeneticIcon />} label="Bio Control" value={odysseyState.vectors.genetic} required={nextRealmDef.thresholds.genetic} color="text-teal-400" progress={(odysseyState.vectors.genetic / nextRealmDef.thresholds.genetic) * 100} />
+                                    <VectorDisplay icon={<MemicIcon />} label="Knowledge" value={odysseyState.vectors.memic} required={nextRealmDef.thresholds.memic} color="text-blue-400" progress={(odysseyState.vectors.memic / nextRealmDef.thresholds.memic) * 100}/>
+                                    <VectorDisplay icon={<CognitiveBandwidthIcon />} label="Cognition" value={odysseyState.vectors.cognitive} required={nextRealmDef.thresholds.cognitive} color="text-yellow-400" progress={(odysseyState.vectors.cognitive / nextRealmDef.thresholds.cognitive) * 100}/>
                                 </div>
                             </>
+                        ) : isOracleLoading ? (
+                             <div className="text-center flex flex-col items-center gap-2 animate-pulse">
+                                <OracleIcon className="h-10 w-10 text-cyan-300" />
+                                <h4 className="font-bold text-xl text-slate-200">The Oracle is contemplating...</h4>
+                                <p className="text-sm text-slate-400">A new path is being revealed.</p>
+                             </div>
                         ) : (
                              <div className="text-center flex flex-col items-center gap-2">
                                 <AscensionIcon className="h-10 w-10 text-yellow-300" />

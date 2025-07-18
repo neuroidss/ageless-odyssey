@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource, Intervention } from './types';
-import { dispatchAgent, synthesizeFindings } from './services/geminiService';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource, Intervention, RealmDefinition } from './types';
+import { dispatchAgent, synthesizeFindings, callAscensionOracle } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { 
     SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS, 
@@ -91,6 +91,11 @@ const App: React.FC = () => {
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
   const [gpuFeatures, setGpuFeatures] = useState<GPUSupportedFeatures | null>(null);
 
+  // --- Ascension Oracle State ---
+  const [dynamicRealmDefinitions, setDynamicRealmDefinitions] = useState<RealmDefinition[]>([...REALM_DEFINITIONS].reverse());
+  const [isOracleLoading, setIsOracleLoading] = useState<boolean>(false);
+
+
   // --- Search Source State ---
   const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.PubMed, SearchDataSource.WebSearch, SearchDataSource.BioRxivSearch]);
 
@@ -175,6 +180,8 @@ const App: React.FC = () => {
             if (savedState.trajectoryState) setTrajectoryState(savedState.trajectoryState);
             if (savedState.odysseyState) setOdysseyState(savedState.odysseyState);
             if (savedState.exploredTopics) setExploredTopics(new Set(savedState.exploredTopics));
+            if (savedState.dynamicRealmDefinitions) setDynamicRealmDefinitions(savedState.dynamicRealmDefinitions);
+
             // Load autonomous mode state
             if (savedState.isAutonomousMode) setIsAutonomousMode(savedState.isAutonomousMode);
             if (savedState.agentBudget) setAgentBudget(savedState.agentBudget);
@@ -221,12 +228,13 @@ const App: React.FC = () => {
             workspaceHistory, hasSearched, trajectoryState, odysseyState,
             exploredTopics: Array.from(exploredTopics),
             isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp,
+            dynamicRealmDefinitions,
         };
         localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (error) {
         addLog(`Error saving state to localStorage: ${error}`);
     }
-  }, [topic, model, quantization, device, searchSources, workspaceHistory, hasSearched, trajectoryState, odysseyState, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp]);
+  }, [topic, model, quantization, device, searchSources, workspaceHistory, hasSearched, trajectoryState, odysseyState, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, dynamicRealmDefinitions]);
 
 
   const handleApiKeyChange = (key: string) => {
@@ -254,11 +262,11 @@ const App: React.FC = () => {
 
   // --- Odyssey Logic ---
   const updateAscensionState = useCallback((action: string, payload?: any) => {
-    setOdysseyState(prev => {
-        let newMemic = prev.vectors.memic;
-        let newGenetic = prev.vectors.genetic;
-        let updatedState = { ...prev };
-        let newAchievements = { ...prev.achievements };
+    setOdysseyState(prevOdysseyState => {
+        let newMemic = prevOdysseyState.vectors.memic;
+        let newGenetic = prevOdysseyState.vectors.genetic;
+        let updatedOdysseyState = { ...prevOdysseyState };
+        let newAchievements = { ...prevOdysseyState.achievements };
         const newToasts: ToastMessage[] = [];
         
         switch(action) {
@@ -318,36 +326,53 @@ const App: React.FC = () => {
             }
             case 'UPDATE_LONGEVITY_SCORE': {
                  const newLongevityScore = Math.max(0, (100 - payload.biologicalAge) * 10);
-                 updatedState.longevityScore = newLongevityScore;
+                 updatedOdysseyState.longevityScore = newLongevityScore;
             }
         }
         
-        // Recalculate Cognitive Bandwidth
-        // It's a function of stable processing time (longevity) and knowledge complexity (memic)
-        const newCognitive = Math.round(updatedState.longevityScore * (1 + Math.log1p(newMemic)));
-        
-        updatedState.vectors = { genetic: newGenetic, memic: newMemic, cognitive: newCognitive };
-        
+        const newCognitive = Math.round(updatedOdysseyState.longevityScore * (1 + Math.log1p(newMemic)));
+        updatedOdysseyState.vectors = { genetic: newGenetic, memic: newMemic, cognitive: newCognitive };
+        updatedOdysseyState.achievements = newAchievements;
+
         // Check for Realm Ascension
-        const currentRealmIndex = REALM_DEFINITIONS.findIndex(r => r.realm === updatedState.realm);
-        const nextRealmDef = REALM_DEFINITIONS[currentRealmIndex + 1];
+        const currentRealmIndex = dynamicRealmDefinitions.findIndex(r => r.realm === updatedOdysseyState.realm);
+        const nextRealmDef = dynamicRealmDefinitions[currentRealmIndex + 1];
 
         if (nextRealmDef) {
-            if (updatedState.vectors.cognitive >= nextRealmDef.thresholds.cognitive && updatedState.vectors.genetic >= nextRealmDef.thresholds.genetic && updatedState.vectors.memic >= nextRealmDef.thresholds.memic) {
-                updatedState.realm = nextRealmDef.realm;
+            if (updatedOdysseyState.vectors.cognitive >= nextRealmDef.thresholds.cognitive && 
+                updatedOdysseyState.vectors.genetic >= nextRealmDef.thresholds.genetic && 
+                updatedOdysseyState.vectors.memic >= nextRealmDef.thresholds.memic) {
+                
+                updatedOdysseyState.realm = nextRealmDef.realm;
                 newToasts.push({ id: Date.now(), title: 'Realm Ascension!', message: `You have ascended to the Realm of the ${nextRealmDef.realm}.`, icon: 'ascension' });
+                
                 if (!newAchievements.REALM_ASCENSION.unlocked && nextRealmDef.realm === Realm.BiologicalOptimizer) {
                     newAchievements.REALM_ASCENSION.unlocked = true;
                 }
             }
+        } else if (!isOracleLoading) { // At the final frontier, call the oracle
+            setIsOracleLoading(true);
+            addLog("Reached final frontier. Calling Ascension Oracle...");
+            const googleAIModel = SUPPORTED_MODELS.find(m => m.provider === ModelProvider.GoogleAI) || model;
+
+            callAscensionOracle(updatedOdysseyState, workspaceHistory[timeLapseIndex], trajectoryState, googleAIModel, apiKey, addLog)
+                .then(newRealm => {
+                    setDynamicRealmDefinitions(prev => [...prev, newRealm]);
+                    setOdysseyState(prev => ({...prev, realm: newRealm.realm})); // Ascend immediately
+                    setToasts(t => [...t, { id: Date.now(), title: 'The Oracle Has Spoken!', message: `A new path is revealed: The Realm of ${newRealm.realm}.`, icon: 'oracle' }]);
+                })
+                .catch(err => {
+                    setError(`The Ascension Oracle failed: ${err.message}`);
+                    addLog(`ORACLE ERROR: ${err.message}`);
+                })
+                .finally(() => setIsOracleLoading(false));
         }
+
+        if (newToasts.length > 0) setToasts(prevToasts => [...prevToasts, ...newToasts.filter(t => t.id > (prevToasts[prevToasts.length - 1]?.id || 0))]);
         
-        updatedState.achievements = newAchievements;
-        if (newToasts.length > 0) setToasts(prevToasts => [...prevToasts, ...newToasts.filter(t => t.id > ((prevToasts[prevToasts.length - 1])?.id || 0))]);
-        
-        return updatedState;
+        return updatedOdysseyState;
     });
-  }, []);
+  }, [dynamicRealmDefinitions, isOracleLoading, apiKey, model, addLog, workspaceHistory, timeLapseIndex, trajectoryState]);
   
   // Effect for Autonomous Agent - Refactored for correctness and responsiveness
   useEffect(() => {
@@ -613,12 +638,12 @@ const App: React.FC = () => {
   return (
     <main className="min-h-screen text-slate-200">
       <div className="container mx-auto px-4 py-8">
-        <Header odysseyState={odysseyState} />
+        <Header odysseyState={odysseyState} dynamicRealmDefinitions={dynamicRealmDefinitions} isOracleLoading={isOracleLoading} />
         <AgentControlPanel
           topic={topic}
           setTopic={setTopic}
           onDispatchAgent={handleDispatchAgent}
-          isLoading={isLoading || isSynthesizing}
+          isLoading={isLoading || isSynthesizing || isOracleLoading}
           model={model}
           setModel={handleModelChange}
           apiKey={apiKey}

@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice } from './types';
+import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice, type RealmDefinition } from './types';
 
 export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] = [
     { label: 'wasm', value: 'wasm' },
@@ -100,7 +100,7 @@ export const VECTOR_POINTS = {
     }
 };
 
-export const REALM_DEFINITIONS: { realm: Realm; description: string; criteria: string[]; thresholds: { cognitive: number; genetic: number; memic: number; } }[] = [
+export const REALM_DEFINITIONS: RealmDefinition[] = [
     { 
         realm: Realm.MortalShell, 
         description: "The baseline human condition. Information processing is limited by biological hardware and its inherent decay.",

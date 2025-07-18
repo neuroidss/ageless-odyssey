@@ -1,7 +1,9 @@
-
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice, SearchDataSource } from '../types';
+import { 
+    type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, 
+    type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice, SearchDataSource, 
+    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition 
+} from '../types';
 import { performFederatedSearch, type SearchResult } from './searchService';
 import { generateTextWithHuggingFace } from './huggingFaceService';
 
@@ -175,7 +177,7 @@ Your response MUST follow this exact JSON structure:
                 userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: {
-                        articles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, summary: { type: Type.STRING }, authors: { type: Type.STRING } } } },
+                        articles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, summary: { type: 'STRING' }, authors: { type: 'STRING' } } } },
                         knowledgeGraph: {
                             type: Type.OBJECT, properties: {
                                 nodes: { type: Type.ARRAY, items: { type: 'OBJECT', properties: { id: { type: 'STRING' }, label: { type: 'STRING' }, type: { type: 'STRING' } } } },
@@ -188,6 +190,25 @@ Your response MUST follow this exact JSON structure:
         }
     }
 };
+
+const parseJsonFromText = (text: string, addLog: (msg: string) => void): string => {
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+        addLog('[Parser] Extracted JSON from markdown code block.');
+        return jsonMatch[1];
+    }
+    
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+        addLog('[Parser] Extracted JSON by finding curly braces.');
+        return text.substring(firstBrace, lastBrace + 1);
+    }
+    
+    addLog(`[Parser] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
+    return text;
+}
+
 
 const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg: string) => void): AgentResponse => {
     try {
@@ -311,42 +332,14 @@ export const dispatchAgent = async (
         }
 
         if (model.provider === ModelProvider.HuggingFace) {
-            jsonText = await generateTextWithHuggingFace(model.id, finalSystemInstruction, userPrompt, quantization, device, addLog, setProgress);
-
-            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                jsonText = jsonMatch[1];
-                 addLog('[HuggingFace] Extracted JSON from markdown code block.');
-            } else {
-                const firstBrace = jsonText.indexOf('{');
-                const lastBrace = jsonText.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
-                    addLog('[HuggingFace] Extracted JSON by finding curly braces.');
-                } else {
-                     addLog(`[HuggingFace] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
-                }
-            }
+            const rawText = await generateTextWithHuggingFace(model.id, finalSystemInstruction, userPrompt, quantization, device, addLog, setProgress);
+            jsonText = parseJsonFromText(rawText, addLog);
         
         } else if (model.provider === ModelProvider.Ollama) {
             if (setProgress) setProgress('Querying local Ollama model...');
-            jsonText = await callOllamaAPI(model.id, finalSystemInstruction, userPrompt, true, addLog);
-            
-            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                jsonText = jsonMatch[1];
-                 addLog('[Ollama] Extracted JSON from markdown code block.');
-            } else {
-                const firstBrace = jsonText.indexOf('{');
-                const lastBrace = jsonText.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                    jsonText = jsonText.substring(firstBrace, lastBrace + 1);
-                    addLog('[Ollama] Extracted JSON by finding curly braces.');
-                } else {
-                     addLog(`[Ollama] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
-                }
-            }
-
+            const rawText = await callOllamaAPI(model.id, finalSystemInstruction, userPrompt, true, addLog);
+            jsonText = parseJsonFromText(rawText, addLog);
+        
         } else { // Google AI provider
             addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
             if (setProgress) setProgress('Querying Google AI...');
@@ -386,23 +379,8 @@ export const dispatchAgent = async (
 
             const rawText = response.text;
             addLog(`[GoogleAI] Received valid response. Length: ${rawText.length}. Attempting to parse JSON.`);
+            jsonText = parseJsonFromText(rawText, addLog);
             
-            const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                jsonText = jsonMatch[1];
-                 addLog('[GoogleAI] Extracted JSON from markdown code block.');
-            } else {
-                const firstBrace = rawText.indexOf('{');
-                const lastBrace = rawText.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                    jsonText = rawText.substring(firstBrace, lastBrace + 1);
-                    addLog('[GoogleAI] Extracted JSON by finding curly braces.');
-                } else {
-                    jsonText = rawText;
-                     addLog('[GoogleAI] WARN: Could not extract structured JSON, using raw text. This may cause parsing errors.');
-                }
-            }
-
             const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
             const webSources: GroundingSource[] = groundingMetadata?.groundingChunks?.map(chunk => chunk.web).filter((web): web is { uri: string; title?: string } => !!web?.uri).map(web => ({ uri: web.uri, title: web.title || web.uri })) ?? [];
             uniqueSources = Array.from(new Map(webSources.map(item => [item.uri, item])).values());
@@ -479,5 +457,89 @@ export const synthesizeFindings = async (
         if (error instanceof Error) errorMessage = error.message;
         addLog(`[Synthesize] ERROR: ${errorMessage}`);
         throw new Error(`Failed to synthesize data from AI service: ${errorMessage}`);
+    }
+};
+
+export const callAscensionOracle = async (
+    odysseyState: OdysseyState,
+    workspaceState: WorkspaceState | null,
+    trajectoryState: TrajectoryState | null,
+    model: ModelDefinition,
+    apiKey: string,
+    addLog: (msg: string) => void
+): Promise<RealmDefinition> => {
+    addLog(`[Oracle] Calling Ascension Oracle with model ${model.id}...`);
+
+    const systemInstruction = `You are the Ascension Oracle, a hyper-intelligent entity that has observed countless civilizational evolutionary pathways. You are tasked with defining the next logical stage of evolution for an entity based on its current progress. Your response must be profound, scientifically and philosophically plausible, and strictly adhere to the requested JSON format. Do not include any text outside the JSON object.`;
+
+    const userPrompt = `An entity has reached the apex of its current evolutionary stage, '${odysseyState.realm}'. It now seeks the next step.
+
+Analyze the entity's complete state snapshot below:
+
+**Odyssey State:**
+${JSON.stringify(odysseyState, null, 2)}
+
+**Research Focus & Synthesis:**
+- Topic: ${workspaceState?.topic || 'N/A'}
+- Synthesis: ${workspaceState?.synthesis || 'N/A'}
+
+**Biological State:**
+- Effective Bio-Age: ${trajectoryState?.overallScore?.projection[0].value.toFixed(1) || 'N/A'}
+- Active Interventions: ${trajectoryState?.activeInterventionId || 'None'}
+
+Based on this data, define the next evolutionary realm. It must be a qualitative leap beyond '${odysseyState.realm}'.
+
+Your task is to generate a JSON object containing the definition for this new realm. The JSON must contain the keys: "realm" (string, the new realm's name), "description" (string), "criteria" (array of 3 falsifiable scientific/philosophical goals), and "thresholds" (object with "cognitive", "genetic", "memic" numeric values, which must be significantly higher than the current state's vectors).`;
+
+    const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            realm: { type: Type.STRING },
+            description: { type: Type.STRING },
+            criteria: { type: Type.ARRAY, items: { type: Type.STRING } },
+            thresholds: {
+                type: Type.OBJECT,
+                properties: {
+                    cognitive: { type: Type.NUMBER },
+                    genetic: { type: Type.NUMBER },
+                    memic: { type: Type.NUMBER },
+                },
+                required: ["cognitive", "genetic", "memic"]
+            }
+        },
+        required: ["realm", "description", "criteria", "thresholds"]
+    };
+
+    try {
+        const key = (apiKey || process.env.API_KEY)?.trim();
+        if (!key) {
+            throw new Error("API Key for Google AI is not provided for the Ascension Oracle.");
+        }
+        const ai = new GoogleGenAI({ apiKey: key });
+
+        const response = await ai.models.generateContent({
+            model: model.id,
+            contents: userPrompt,
+            config: {
+                systemInstruction,
+                responseMimeType: 'application/json',
+                responseSchema
+            }
+        });
+
+        if (!response.text) {
+             throw new Error("Ascension Oracle returned an empty response.");
+        }
+        
+        const jsonText = parseJsonFromText(response.text, addLog);
+        const newRealmDef = JSON.parse(jsonText) as RealmDefinition;
+
+        addLog(`[Oracle] Success! The Oracle has defined the new realm of: ${newRealmDef.realm}`);
+        return newRealmDef;
+
+    } catch(e) {
+        const message = e instanceof Error ? e.message : 'An unknown error occurred.';
+        addLog(`[Oracle] ERROR: The Ascension Oracle failed to respond. ${message}`);
+        throw new Error(`The Ascension Oracle failed: ${message}`);
     }
 };

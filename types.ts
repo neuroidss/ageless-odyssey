@@ -177,6 +177,17 @@ export enum Realm {
     StellarMetamorph = "Stellar Metamorph",
 }
 
+export interface RealmDefinition {
+    realm: string;
+    description: string;
+    criteria: string[];
+    thresholds: {
+        cognitive: number;
+        genetic: number;
+        memic: number;
+    };
+}
+
 export interface Achievement {
   id: string;
   name: string;
@@ -186,7 +197,7 @@ export interface Achievement {
 }
 
 export interface OdysseyState {
-  realm: Realm;
+  realm: string; // Changed to string to allow dynamic, AI-generated realms
   vectors: {
     genetic: number;  // Represents biological integrity, improved by interventions
     memic: number;    // Represents knowledge contribution, improved by research
@@ -200,5 +211,5 @@ export interface ToastMessage {
     id: number;
     title: string;
     message: string;
-    icon?: 'achievement' | 'levelup' | 'ascension';
+    icon?: 'achievement' | 'levelup' | 'ascension' | 'oracle';
 }

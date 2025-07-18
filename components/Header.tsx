@@ -1,14 +1,14 @@
-
-
 import React from 'react';
-import { OdysseyState } from '../types';
+import { OdysseyState, RealmDefinition } from '../types';
 import OdysseyMap from './GamificationDashboard';
 
 interface HeaderProps {
     odysseyState: OdysseyState;
+    dynamicRealmDefinitions: RealmDefinition[];
+    isOracleLoading: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ odysseyState }) => {
+const Header: React.FC<HeaderProps> = ({ odysseyState, dynamicRealmDefinitions, isOracleLoading }) => {
   return (
     <header className="py-8 px-4 flex flex-col items-center gap-8">
         <div className="text-center">
@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({ odysseyState }) => {
                 Your journey to the stars begins within. Evolve from your mortal shell, conquer the challenges of new frontiers, and rewrite your biological destiny.
             </p>
         </div>
-        <OdysseyMap odysseyState={odysseyState} />
+        <OdysseyMap odysseyState={odysseyState} dynamicRealmDefinitions={dynamicRealmDefinitions} isOracleLoading={isOracleLoading} />
     </header>
   );
 };
