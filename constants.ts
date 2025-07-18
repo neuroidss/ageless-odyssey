@@ -1,5 +1,3 @@
-
-
 import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice } from './types';
 
 export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] = [
@@ -65,14 +63,20 @@ export const SUPPORTED_MODELS: ModelDefinition[] = [
 
 
 export const INTERVENTIONS: Intervention[] = [
-    // Biological Interventions
+    // Biological Interventions (For Biological Optimizer)
     { id: 'cr', name: 'Caloric Restriction', description: 'Reduces metabolic stress and nutrient-sensing pathways.', type: 'biological', effects: { mito_efficiency: 0.1, epigenetic_noise: 0.08, proteostasis: 0.05 } },
     { id: 'senolytics', name: 'Senolytics', description: 'Selectively clear senescent cells from tissues.', type: 'biological', effects: { senescent_cells: 0.3 } },
     { id: 'metformin', name: 'Metformin', description: 'Improves insulin sensitivity and mitochondrial function.', type: 'biological', effects: { mito_efficiency: 0.15, senescent_cells: 0.05 } },
     { id: 'nad_precursors', name: 'NAD+ Precursors', description: 'Boosts levels of NAD+, a key coenzyme for DNA repair and metabolism.', type: 'biological', effects: { telomere_length: 0.02, mito_efficiency: 0.1, proteostasis: 0.08 } },
-    // Radical Interventions
-    { id: 'full_body_prosthesis', name: 'Full-Body Cybernetic Replacement', description: 'Replace all biological organs and limbs, except the brain, with advanced cybernetics. Eliminates systemic biological aging.', type: 'radical', effects: { all_biomarkers: 1.0, cognitive: 50 } }, // '1.0' signifies full optimization
-    { id: 'neuro_interface', name: 'Neural-Digital Interface', description: 'Augment the brain with a direct neural link, enhancing cognitive function and preparing for substrate transfer.', type: 'radical', effects: { cognitive: 25 } },
+    
+    // Environmental / Substrate Interventions (For Substrate Enhanced)
+    { id: 'gills_and_pressure_acclimation', name: 'Gills & Pressure Acclimation', description: 'Genetic modifications for underwater breathing and resisting deep-sea pressures.', type: 'environmental', effects: { mito_efficiency: 0.25, proteostasis: 0.2 } },
+    { id: 'radiation_shield_weave', name: 'Radiation Shield Gene-Weave', description: 'Tardigrade-inspired DNA repair and protein shielding for surviving cosmic radiation.', type: 'environmental', effects: { telomere_length: 0.1, senescent_cells: 0.2, epigenetic_noise: 0.2 } },
+    
+    // Radical Interventions (For later Realms)
+    { id: 'neuro_interface', name: 'Neural-Digital Interface', description: 'Augment the brain with a direct neural link, the first step towards an Exocortex.', type: 'radical', effects: { cognitive: 250 } },
+    { id: 'mind_upload', name: 'Mind Substrate Transfer', description: 'Complete transfer of consciousness to a digital substrate. Bypasses all biological limitations.', type: 'radical', effects: { all_biomarkers: 1.0, cognitive: 500 } },
+    { id: 'distributed_consciousness', name: 'Consciousness Distribution', description: 'Fractalize your digital mind across a decentralized network, making it resilient and near-omnipresent.', type: 'radical', effects: { cognitive: 1000 } },
 ];
 
 
@@ -96,12 +100,14 @@ export const VECTOR_POINTS = {
 };
 
 export const REALM_DEFINITIONS: { realm: Realm; description: string; thresholds: { cognitive: number; genetic: number; memic: number; } }[] = [
-    { realm: Realm.SubstrateIndependence, description: "Consciousness is no longer bound to its biological substrate. True cognitive immortality.", thresholds: { cognitive: 950, genetic: 900, memic: 1000 } },
-    { realm: Realm.BiologicalEscapeVelocity, description: "Your healthspan is extending faster than time is passing. Aging is a solved problem.", thresholds: { cognitive: 800, genetic: 750, memic: 500 } },
-    { realm: Realm.AgeReversalPioneer, description: "Applying interventions that measurably reverse biological age, not just slow it.", thresholds: { cognitive: 650, genetic: 500, memic: 250 } },
-    { realm: Realm.OptimizedMortal, description: "Actively slowing the aging process to extend healthspan beyond the norm.", thresholds: { cognitive: 500, genetic: 100, memic: 50 } },
-    { realm: Realm.MortalBaseline, description: "A standard human life trajectory, subject to the natural course of aging.", thresholds: { cognitive: 0, genetic: 0, memic: 0 } },
-];
+    { realm: Realm.StellarMetamorph, description: "Your form, a vessel of pure energy and data, is no longer limited by conventional physics, ready to traverse the void.", thresholds: { cognitive: 15000, genetic: 15000, memic: 20000 } },
+    { realm: Realm.DistributedEntity, description: "Severing ties to a single instance. Your consciousness exists as a decentralized network across multiple nodes.", thresholds: { cognitive: 9500, genetic: 9000, memic: 10000 } },
+    { realm: Realm.DigitalAscendant, description: "Achieving substrate independence. Your consciousness, now fully digitized, can inhabit simulated realities or portable hardware.", thresholds: { cognitive: 6000, genetic: 5000, memic: 5000 } },
+    { realm: Realm.ExocortexIntegrator, description: "Offloading cognition to a secure, external processing core via a direct neural interface, forming a 'golden core' of knowledge.", thresholds: { cognitive: 3000, genetic: 2500, memic: 1500 } },
+    { realm: Realm.SubstrateEnhanced, description: "Moving beyond baseline biology by integrating basic cybernetics, advanced gene-weaves, and redundant organs.", thresholds: { cognitive: 1500, genetic: 1000, memic: 500 } },
+    { realm: Realm.BiologicalOptimizer, description: "Mastering the body's own systems to achieve peak human health and reverse the core hallmarks of aging.", thresholds: { cognitive: 500, genetic: 200, memic: 100 } },
+    { realm: Realm.MortalShell, description: "The baseline human condition, a fragile vessel subject to the immutable decay of time.", thresholds: { cognitive: 0, genetic: 0, memic: 0 } },
+].reverse(); // Reverse to have MortalShell at index 0 for easier progression logic
 
 
 export const ACHIEVEMENTS: Record<string, Omit<Achievement, 'unlocked'>> = {
@@ -114,5 +120,5 @@ export const ACHIEVEMENTS: Record<string, Omit<Achievement, 'unlocked'>> = {
   TRANSHUMANIST: { id: 'TRANSHUMANIST', name: 'Transhumanist', description: 'Simulate a radical intervention, embracing a post-biological future.', xp: 250 },
   HALLMARK_EXPLORER: { id: 'HALLMARK_EXPLORER', name: 'Hallmark Explorer', description: 'Research 3 different hallmarks of aging.', xp: 100 },
   SCORE_MILESTONE_1: { id: 'SCORE_MILESTONE_1', name: 'Longevity Adept', description: 'Achieve a Longevity Score of 550 or more.', xp: 150 },
-  REALM_ASCENSION: { id: 'REALM_ASCENSION', name: 'Ascendant', description: 'Reach the Realm of the Optimized Mortal.', xp: 200 },
+  REALM_ASCENSION: { id: 'REALM_ASCENSION', name: 'Ascendant', description: 'Reach the Realm of the Biological Optimizer.', xp: 200 },
 };

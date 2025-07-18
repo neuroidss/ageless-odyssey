@@ -1,6 +1,5 @@
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { 
@@ -16,14 +15,14 @@ import DebugLogView from './components/DebugLogView';
 
 const APP_STATE_STORAGE_KEY = 'agelessOdysseyState';
 
-const getInitialGamificationState = (): GamificationState => {
+const getInitialOdysseyState = (): OdysseyState => {
   const achievements = Object.entries(ACHIEVEMENTS).reduce((acc, [key, value]) => {
     acc[key] = { ...value, unlocked: false };
     return acc;
-  }, {} as GamificationState['achievements']);
+  }, {} as OdysseyState['achievements']);
   
   return {
-    realm: Realm.MortalBaseline,
+    realm: Realm.MortalShell,
     vectors: {
       genetic: 0,
       memic: 0,
@@ -87,10 +86,14 @@ const App: React.FC = () => {
   const [trajectoryState, setTrajectoryState] = useState<TrajectoryState | null>(null);
 
   const [apiKey, setApiKey] = useState<string>('');
-  const [gamification, setGamification] = useState<GamificationState>(getInitialGamificationState());
+  const [odysseyState, setOdysseyState] = useState<OdysseyState>(getInitialOdysseyState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
   const [gpuFeatures, setGpuFeatures] = useState<GPUSupportedFeatures | null>(null);
+
+  // --- Search Source State ---
+  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.PubMed, SearchDataSource.WebSearch, SearchDataSource.BioRxivSearch]);
+
 
   // --- Autonomous Mode State ---
   const [isAutonomousMode, setIsAutonomousMode] = useState<boolean>(false);
@@ -98,6 +101,7 @@ const App: React.FC = () => {
   const [agentBudget, setAgentBudget] = useState<number>(DEFAULT_AGENT_BUDGET);
   const [agentCallsMade, setAgentCallsMade] = useState<number>(0);
   const [budgetResetTimestamp, setBudgetResetTimestamp] = useState<number>(0);
+  const [autonomousRunCount, setAutonomousRunCount] = useState<number>(0);
   const autonomousTimerRef = useRef<number | null>(null);
 
 
@@ -162,13 +166,14 @@ const App: React.FC = () => {
             setModel(savedModel);
             if (savedState.quantization) setQuantization(savedState.quantization);
             if (savedState.device) setDevice(savedState.device);
+            if (savedState.searchSources) setSearchSources(savedState.searchSources);
             if (savedState.workspaceHistory && savedState.workspaceHistory.length > 0) {
               setWorkspaceHistory(savedState.workspaceHistory);
               setTimeLapseIndex(savedState.workspaceHistory.length - 1);
             }
             if (savedState.hasSearched) setHasSearched(savedState.hasSearched);
             if (savedState.trajectoryState) setTrajectoryState(savedState.trajectoryState);
-            if (savedState.gamification) setGamification(savedState.gamification);
+            if (savedState.odysseyState) setOdysseyState(savedState.odysseyState);
             if (savedState.exploredTopics) setExploredTopics(new Set(savedState.exploredTopics));
             // Load autonomous mode state
             if (savedState.isAutonomousMode) setIsAutonomousMode(savedState.isAutonomousMode);
@@ -192,7 +197,7 @@ const App: React.FC = () => {
             setTrajectoryState(initialState);
             const biologicalAge = initialState.overallScore.projection[0].value;
             const longevityScore = Math.max(0, (100 - biologicalAge) * 10);
-            setGamification(prev => ({...prev, longevityScore, vectors: {...prev.vectors, cognitive: longevityScore}}));
+            setOdysseyState(prev => ({...prev, longevityScore, vectors: {...prev.vectors, cognitive: longevityScore}}));
             setBudgetResetTimestamp(Date.now());
             addLog("No saved state found. Initialized new session.");
         }
@@ -212,8 +217,8 @@ const App: React.FC = () => {
 
     try {
         const stateToSave = {
-            topic, model, quantization, device,
-            workspaceHistory, hasSearched, trajectoryState, gamification,
+            topic, model, quantization, device, searchSources,
+            workspaceHistory, hasSearched, trajectoryState, odysseyState,
             exploredTopics: Array.from(exploredTopics),
             isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp,
         };
@@ -221,7 +226,7 @@ const App: React.FC = () => {
     } catch (error) {
         addLog(`Error saving state to localStorage: ${error}`);
     }
-  }, [topic, model, quantization, device, workspaceHistory, hasSearched, trajectoryState, gamification, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp]);
+  }, [topic, model, quantization, device, searchSources, workspaceHistory, hasSearched, trajectoryState, odysseyState, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp]);
 
 
   const handleApiKeyChange = (key: string) => {
@@ -237,10 +242,19 @@ const App: React.FC = () => {
         addLog(`Switched to Hugging Face model. Default quantization set to '${DEFAULT_HUGGING_FACE_QUANTIZATION}'.`);
     }
   };
+  
+  const handleToggleSearchSource = (source: SearchDataSource) => {
+    setSearchSources(prev => 
+        prev.includes(source) 
+            ? prev.filter(s => s !== source) 
+            : [...prev, source]
+    );
+    addLog(`Toggled search source: ${source}`);
+  };
 
-  // --- Gamification Logic ---
+  // --- Odyssey Logic ---
   const updateAscensionState = useCallback((action: string, payload?: any) => {
-    setGamification(prev => {
+    setOdysseyState(prev => {
         let newVectors = { ...prev.vectors };
         const newToasts: ToastMessage[] = [];
         let updatedState = { ...prev, vectors: newVectors };
@@ -276,6 +290,9 @@ const App: React.FC = () => {
                 if (payload.interventionEffect) newVectors.genetic += Math.round(payload.interventionEffect * VECTOR_POINTS.GENETIC.BIOMARKER_IMPROVEMENT_MULTIPLIER);
                 if (payload.isRadical) {
                     newVectors.genetic += VECTOR_POINTS.GENETIC.RADICAL_INTERVENTION_BONUS;
+                    if (payload.cognitiveBoost) {
+                        newVectors.cognitive += payload.cognitiveBoost;
+                    }
                     if (!newAchievements.TRANSHUMANIST.unlocked) {
                         newAchievements.TRANSHUMANIST.unlocked = true;
                         newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.TRANSHUMANIST.name, icon: 'achievement' });
@@ -285,15 +302,16 @@ const App: React.FC = () => {
             }
         }
         
-        const currentRealmDef = REALM_DEFINITIONS.find(r => r.realm === updatedState.realm);
-        const nextRealmIndex = REALM_DEFINITIONS.indexOf(currentRealmDef!) - 1;
+        const currentRealmIndex = REALM_DEFINITIONS.findIndex(r => r.realm === updatedState.realm);
+        const nextRealmDef = REALM_DEFINITIONS[currentRealmIndex + 1];
 
-        if (nextRealmIndex >= 0) {
-            const nextRealmDef = REALM_DEFINITIONS[nextRealmIndex];
+        if (nextRealmDef) {
             if (updatedState.vectors.cognitive >= nextRealmDef.thresholds.cognitive && updatedState.vectors.genetic >= nextRealmDef.thresholds.genetic && updatedState.vectors.memic >= nextRealmDef.thresholds.memic) {
                 updatedState.realm = nextRealmDef.realm;
                 newToasts.push({ id: Date.now(), title: 'Realm Ascension!', message: `You have ascended to the Realm of the ${nextRealmDef.realm}.`, icon: 'ascension' });
-                if (!newAchievements.REALM_ASCENSION.unlocked && nextRealmDef.realm === Realm.OptimizedMortal) newAchievements.REALM_ASCENSION.unlocked = true;
+                if (!newAchievements.REALM_ASCENSION.unlocked && nextRealmDef.realm === Realm.BiologicalOptimizer) {
+                    newAchievements.REALM_ASCENSION.unlocked = true;
+                }
             }
         }
         
@@ -354,9 +372,12 @@ const App: React.FC = () => {
         addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
         setIsAutonomousLoading(true);
         try {
-            const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device);
+            const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device, searchSources);
             addLog(`[Autonomous] Agent finished. Found ${response.items.length} new items.`);
             
+            // On success, increment the counter for used budget. This happens even if no items are found.
+            setAgentCallsMade(prev => prev + 1);
+
             if (response.items.length > 0) {
                 setHasSearched(prev => prev ? prev : true);
                 setWorkspaceHistory(prevHistory => {
@@ -375,10 +396,11 @@ const App: React.FC = () => {
         } catch (e) {
             const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
             addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
+            // Do not increment agentCallsMade on error.
         } finally {
-            // This state update will trigger this effect to re-run and schedule the next call correctly.
-            // It's in `finally` to ensure we don't get stuck in a loop on error.
-            setAgentCallsMade(prev => prev + 1);
+            // This state update triggers the effect to re-run and schedule the next call,
+            // regardless of whether the last call succeeded or failed.
+            setAutonomousRunCount(prev => prev + 1);
             setIsAutonomousLoading(false);
         }
     }, finalInterval);
@@ -388,7 +410,7 @@ const App: React.FC = () => {
             clearTimeout(autonomousTimerRef.current);
         }
     };
-  }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, addLog, updateAscensionState]);
+  }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, searchSources, addLog, updateAscensionState, autonomousRunCount]);
 
   const handleTimeLapseChange = (index: number) => {
     setTimeLapseIndex(index);
@@ -416,7 +438,7 @@ const App: React.FC = () => {
         setExploredTopics(prev => new Set(prev).add(topic));
         updateAscensionState('NEW_TOPIC');
         if (Array.from(exploredTopics).length + 1 >= 3) {
-            setGamification(prev => {
+            setOdysseyState(prev => {
                 if (!prev.achievements.HALLMARK_EXPLORER.unlocked) {
                     setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Hallmark Explorer", icon: 'achievement' }]);
                     return {...prev, achievements: {...prev.achievements, HALLMARK_EXPLORER: {...prev.achievements.HALLMARK_EXPLORER, unlocked: true}}};
@@ -435,6 +457,7 @@ const App: React.FC = () => {
         addLog,
         apiKey,
         device,
+        searchSources,
         (msg) => setLoadingMessage(msg)
       );
       
@@ -445,8 +468,8 @@ const App: React.FC = () => {
 
       // Memic point updates
       updateAscensionState('DISPATCH_AGENT');
-      if (!gamification.achievements.FIRST_RESEARCH.unlocked) {
-            setGamification(prev => {
+      if (!odysseyState.achievements.FIRST_RESEARCH.unlocked) {
+            setOdysseyState(prev => {
                 setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Budding Scientist", icon: 'achievement' }]);
                 return {...prev, achievements: {...prev.achievements, FIRST_RESEARCH: {...prev.achievements.FIRST_RESEARCH, unlocked: true}}};
             });
@@ -455,8 +478,8 @@ const App: React.FC = () => {
       if (response.knowledgeGraph) {
           const nodesAdded = newWorkspace.knowledgeGraph!.nodes.length - (previousWorkspace?.knowledgeGraph?.nodes.length || 0);
           updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
-          if (newWorkspace.knowledgeGraph!.nodes.length >= 5 && !gamification.achievements.KNOWLEDGE_ARCHITECT.unlocked) {
-                setGamification(prev => {
+          if (newWorkspace.knowledgeGraph!.nodes.length >= 5 && !odysseyState.achievements.KNOWLEDGE_ARCHITECT.unlocked) {
+                setOdysseyState(prev => {
                     setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Knowledge Architect", icon: 'achievement' }]);
                     return {...prev, achievements: {...prev.achievements, KNOWLEDGE_ARCHITECT: {...prev.achievements.KNOWLEDGE_ARCHITECT, unlocked: true}}};
                 });
@@ -480,7 +503,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [topic, model, quantization, apiKey, device, addLog, workspaceHistory, gamification.achievements, exploredTopics, updateAscensionState]);
+  }, [topic, model, quantization, apiKey, device, searchSources, addLog, workspaceHistory, odysseyState.achievements, exploredTopics, updateAscensionState]);
   
   const handleSynthesize = useCallback(async () => {
     const currentWorkspace = workspaceHistory[timeLapseIndex];
@@ -501,8 +524,8 @@ const App: React.FC = () => {
         });
 
         updateAscensionState('SYNTHESIZE');
-        if (!gamification.achievements.SYNTHESIZER.unlocked) {
-            setGamification(prev => {
+        if (!odysseyState.achievements.SYNTHESIZER.unlocked) {
+            setOdysseyState(prev => {
                 setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "The Synthesizer", icon: 'achievement' }]);
                 return {...prev, achievements: {...prev.achievements, SYNTHESIZER: {...prev.achievements.SYNTHESIZER, unlocked: true}}};
             });
@@ -514,8 +537,8 @@ const App: React.FC = () => {
             setTrajectoryState(initialState);
             const biologicalAge = initialState.overallScore.projection[0].value;
             updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge });
-             if (initialState.overallScore.projection[0].value <= 45 && !gamification.achievements.SCORE_MILESTONE_1.unlocked) { // This condition is based on Longevity Score > 550
-                setGamification(prev => {
+             if (initialState.overallScore.projection[0].value <= 45 && !odysseyState.achievements.SCORE_MILESTONE_1.unlocked) { // This condition is based on Longevity Score > 550
+                setOdysseyState(prev => {
                     setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Longevity Adept", icon: 'achievement' }]);
                     return {...prev, achievements: {...prev.achievements, SCORE_MILESTONE_1: {...prev.achievements.SCORE_MILESTONE_1, unlocked: true}}};
                 });
@@ -529,23 +552,28 @@ const App: React.FC = () => {
     } finally {
         setIsSynthesizing(false);
     }
-  }, [workspaceHistory, timeLapseIndex, model, quantization, apiKey, device, addLog, updateAscensionState, gamification.achievements, trajectoryState]);
+  }, [workspaceHistory, timeLapseIndex, model, quantization, apiKey, device, addLog, updateAscensionState, odysseyState.achievements, trajectoryState]);
 
   const handleApplyIntervention = (interventionId: string | null) => {
     const newState = applyIntervention(interventionId);
     setTrajectoryState(newState);
     
-    // Gamification update
+    // Odyssey update
     if (interventionId) {
         const intervention = INTERVENTIONS.find(i => i.id === interventionId)!;
         const oldBioAge = trajectoryState?.overallScore.projection[0].value || 100;
         const newBioAge = newState.overallScore.interventionProjection![0].value;
         const interventionEffect = (oldBioAge - newBioAge) / oldBioAge;
 
-        updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: newBioAge, interventionEffect: interventionEffect, isRadical: intervention.type === 'radical' });
+        updateAscensionState('UPDATE_TRAJECTORY', { 
+            biologicalAge: newBioAge, 
+            interventionEffect: interventionEffect, 
+            isRadical: intervention.type === 'radical',
+            cognitiveBoost: intervention.effects.cognitive || 0
+        });
 
-        if (!gamification.achievements.BIO_STRATEGIST.unlocked) {
-            setGamification(prev => {
+        if (!odysseyState.achievements.BIO_STRATEGIST.unlocked) {
+            setOdysseyState(prev => {
                 setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Bio-Strategist", icon: 'achievement' }]);
                 return {...prev, achievements: {...prev.achievements, BIO_STRATEGIST: {...prev.achievements.BIO_STRATEGIST, unlocked: true}}};
             });
@@ -569,7 +597,7 @@ const App: React.FC = () => {
         setError(null);
         setSynthesisError(null);
         setTrajectoryState(getInitialTrajectory());
-        setGamification(getInitialGamificationState());
+        setOdysseyState(getInitialOdysseyState());
         setExploredTopics(new Set());
         setIsAutonomousMode(false);
         setAgentBudget(DEFAULT_AGENT_BUDGET);
@@ -593,7 +621,7 @@ const App: React.FC = () => {
   return (
     <main className="min-h-screen text-slate-200">
       <div className="container mx-auto px-4 py-8">
-        <Header gamification={gamification} />
+        <Header odysseyState={odysseyState} />
         <AgentControlPanel
           topic={topic}
           setTopic={setTopic}
@@ -613,6 +641,8 @@ const App: React.FC = () => {
           setAgentBudget={setAgentBudget}
           agentCallsMade={agentCallsMade}
           gpuFeatures={gpuFeatures}
+          searchSources={searchSources}
+          onToggleSearchSource={handleToggleSearchSource}
         />
         <WorkspaceView
           workspace={currentWorkspace}

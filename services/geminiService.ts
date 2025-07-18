@@ -1,8 +1,8 @@
 
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice } from '../types';
-import { searchDuckDuckGo, type SearchResult } from './searchService';
+import { type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice, SearchDataSource } from '../types';
+import { performFederatedSearch, type SearchResult } from './searchService';
 import { generateTextWithHuggingFace } from './huggingFaceService';
 
 const OLLAMA_BASE_URL = 'http://localhost:11434/api/generate';
@@ -56,7 +56,7 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
     const jsonOutputInstruction = "You MUST output your findings as a single, valid JSON object and NOTHING ELSE. Do not include any explanatory text, markdown formatting, or any other characters outside of the main JSON object.";
     
     const contextPreamble = searchContext 
-        ? `Based *only* on the following web search results, fulfill the user's request.\n\n<SEARCH_RESULTS>\n${searchContext}\n</SEARCH_RESULTS>\n\n`
+        ? `Based *only* on the following search results from various scientific databases and the web, fulfill the user's request.\n\n<SEARCH_RESULTS>\n${searchContext}\n</SEARCH_RESULTS>\n\n`
         : '';
 
     const isLocalModel = provider === ModelProvider.Ollama || provider === ModelProvider.HuggingFace;
@@ -178,8 +178,8 @@ Your response MUST follow this exact JSON structure:
                         articles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, summary: { type: Type.STRING }, authors: { type: Type.STRING } } } },
                         knowledgeGraph: {
                             type: Type.OBJECT, properties: {
-                                nodes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, label: { type: Type.STRING }, type: { type: Type.STRING } } } },
-                                edges: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source: { type: Type.STRING }, target: { type: Type.STRING }, label: { type: Type.STRING } } } }
+                                nodes: { type: Type.ARRAY, items: { type: 'OBJECT', properties: { id: { type: 'STRING' }, label: { type: 'STRING' }, type: { type: 'STRING' } } } },
+                                edges: { type: Type.ARRAY, items: { type: 'OBJECT', properties: { source: { type: 'STRING' }, target: { type: 'STRING' }, label: { type: 'STRING' } } } }
                             }
                         }
                     }
@@ -264,8 +264,9 @@ export const dispatchAgent = async (
     model: ModelDefinition, 
     quantization: string,
     addLog: (msg: string) => void, 
-    apiKey?: string,
-    device: HuggingFaceDevice = 'wasm',
+    apiKey: string | undefined,
+    device: HuggingFaceDevice,
+    searchSources: SearchDataSource[],
     setProgress?: (msg: string) => void,
 ): Promise<AgentResponse> => {
     
@@ -279,22 +280,22 @@ export const dispatchAgent = async (
         const isGoogleModel = model.provider === ModelProvider.GoogleAI;
 
         if (!isGoogleModel) {
-            addLog(`[Search] Local model detected (${model.provider}). Initiating web search for context...`);
-            if (setProgress) setProgress('Performing web search for context...');
+            addLog(`[Search] Local model detected (${model.provider}). Initiating federated search for context...`);
+            if (setProgress) setProgress('Performing search for context...');
             try {
-                const searchResults = await searchDuckDuckGo(query, addLog);
+                const searchResults = await performFederatedSearch(query, searchSources, addLog);
                 if (searchResults.length > 0) {
-                    searchContext = searchResults.map((r, i) => `[CONTEXT ${i+1}]\nURL: ${r.link}\nTITLE: ${r.title}\nCONTENT: ${r.snippet}`).join('\n\n');
+                    searchContext = searchResults.map((r, i) => `[CONTEXT ${i+1} from ${r.source}]\nURL: ${r.link}\nTITLE: ${r.title}\nCONTENT: ${r.snippet}`).join('\n\n');
                     uniqueSources = searchResults.map(r => ({ uri: r.link, title: r.title }));
-                    addLog(`[Search] Web search successful. Provided ${searchResults.length} results to the model as context.`);
+                    addLog(`[Search] Federated search successful. Provided ${searchResults.length} results to the model as context.`);
                 } else {
-                    addLog(`[Search] ERROR: Web search returned no results. Aborting agent dispatch to prevent hallucination.`);
-                    throw new Error("Web search returned no results. Agent dispatch aborted for data reliability.");
+                    addLog(`[Search] ERROR: Federated search returned no results. Aborting agent dispatch to prevent hallucination.`);
+                    throw new Error("Federated search returned no results. Agent dispatch aborted for data reliability.");
                 }
             } catch (searchError) {
                 const message = searchError instanceof Error ? searchError.message : String(searchError);
-                addLog(`[Search] ERROR: Web search failed. Aborting agent dispatch. Error: ${message}`);
-                throw new Error(`Web search failed, cannot proceed with local model. Error: ${message}`);
+                addLog(`[Search] ERROR: Federated search failed. Aborting agent dispatch. Error: ${message}`);
+                throw new Error(`Federated search failed, cannot proceed with local model. Error: ${message}`);
             }
         } else {
             addLog(`[Search] Google AI model detected. Skipping local search, will use Google Search grounding.`);
@@ -304,7 +305,7 @@ export const dispatchAgent = async (
 
         let finalSystemInstruction = systemInstruction;
         if (!isGoogleModel && !searchContext) {
-            const antiHallucinationPrompt = `\n\nIMPORTANT INSTRUCTION: You have been provided with NO web search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, articles, search results, or web links. For the "articles" field in your JSON response, you MUST return an empty array.`;
+            const antiHallucinationPrompt = `\n\nIMPORTANT INSTRUCTION: You have been provided with NO search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, articles, search results, or web links. For the "articles" field in your JSON response, you MUST return an empty array.`;
             finalSystemInstruction += antiHallucinationPrompt;
             addLog(`[dispatchAgent] Added anti-hallucination instructions for local model due to empty search results.`);
         }

@@ -1,13 +1,14 @@
 
+
 import React from 'react';
-import { GamificationState } from '../types';
-import GamificationDashboard from './GamificationDashboard';
+import { OdysseyState } from '../types';
+import OdysseyMap from './GamificationDashboard';
 
 interface HeaderProps {
-    gamification: GamificationState;
+    odysseyState: OdysseyState;
 }
 
-const Header: React.FC<HeaderProps> = ({ gamification }) => {
+const Header: React.FC<HeaderProps> = ({ odysseyState }) => {
   return (
     <header className="py-8 px-4 flex flex-col items-center gap-8">
         <div className="text-center">
@@ -15,11 +16,10 @@ const Header: React.FC<HeaderProps> = ({ gamification }) => {
                 The Ageless Odyssey
             </h1>
             <p className="mt-4 text-lg text-slate-400 max-w-3xl mx-auto">
-                Embark on your personal quest to conquer aging. Navigate the science, track your progress, and rewrite your biological destiny.
-                This journey is inspired by the <a href="https://transhuman.ru/starenie" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Systemic Scheme of Human Aging</a>.
+                Your journey to the stars begins within. Evolve from your mortal shell, conquer the challenges of new frontiers, and rewrite your biological destiny.
             </p>
         </div>
-        <GamificationDashboard gamification={gamification} />
+        <OdysseyMap odysseyState={odysseyState} />
     </header>
   );
 };

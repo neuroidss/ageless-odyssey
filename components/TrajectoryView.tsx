@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { type TrajectoryState, type Biomarker, Intervention } from '../types';
 import LineChart from './LineChart';
@@ -54,6 +55,7 @@ const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onAppl
     const currentScore = (isRadicalInterventionActive && overallScore.interventionProjection) ? overallScore.interventionProjection[0].value : overallScore.projection[0].value;
 
     const biologicalInterventions = INTERVENTIONS.filter(i => i.type === 'biological');
+    const environmentalInterventions = INTERVENTIONS.filter(i => i.type === 'environmental');
     const radicalInterventions = INTERVENTIONS.filter(i => i.type === 'radical');
 
     return (
@@ -88,6 +90,11 @@ const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onAppl
                                 <option value="">None (Baseline)</option>
                                 <optgroup label="Biological Interventions">
                                     {biologicalInterventions.map(i => (
+                                        <option key={i.id} value={i.id}>{i.name}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Environmental Adaptations">
+                                    {environmentalInterventions.map(i => (
                                         <option key={i.id} value={i.id}>{i.name}</option>
                                     ))}
                                 </optgroup>

@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export const ArticleIcon = () => (
@@ -115,21 +114,6 @@ export const DnaIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
-export const MemicIcon = ({className = "h-6 w-6"}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1-.7l-.7.7M5.6 18.4l.7-.7m12.1.7l-.7-.7"/>
-        <circle cx="12" cy="12" r="2"/>
-        <path d="M12 14v2a2 2 0 0 0 2 2h2"/>
-        <path d="M10 20h2a2 2 0 0 0 2-2v-2"/>
-        <path d="M12 8V6a2 2 0 0 1 2-2h2"/>
-        <path d="M10 4h2a2 2 0 0 1 2 2v2"/>
-        <path d="M14 12h2a2 2 0 0 1 2 2v2"/>
-        <path d="M20 10v2a2 2 0 0 1-2 2h-2"/>
-        <path d="M8 12H6a2 2 0 0 0-2 2v2"/>
-        <path d="M4 10v2a2 2 0 0 0 2 2h2"/>
-    </svg>
-);
-
 export const CognitiveIcon = ({className = "h-6 w-6"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2a10 10 0 0 0-3.5 19.33V18a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3.33A10 10 0 0 0 12 2Z"/>
@@ -175,5 +159,61 @@ export const NetworkIcon = ({className = "h-8 w-8"}) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12a2.25 2.25 0 0 0 2.25-2.25V6" />
         <circle cx="9" cy="9" r="1.5" fill="currentColor"/>
         <circle cx="15" cy="15" r="1.5" fill="currentColor"/>
+    </svg>
+);
+
+// --- Realm Icons ---
+export const ShellIcon = ({className="h-6 w-6"}) => ( // Mortal Shell
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" /><path d="M12 13c-3.86 0-7 1.27-7 3v3h14v-3c0-1.73-3.14-3-7-3Z" /></svg>
+);
+
+export const BiologicalOptimizerIcon = ({className="h-6 w-6"}) => ( // Biological Optimizer
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.311a15.018 15.018 0 0 1-6.75 0" /><path strokeLinecap="round" strokeLinejoin="round" d="M9.344 3.071c.72.124 1.453.124 2.173 0a13.842 13.842 0 0 1 5.234 1.705 13.831 13.831 0 0 1 3.546 4.291 13.842 13.842 0 0 1 0 6.666 13.831 13.831 0 0 1-3.546 4.291 13.842 13.842 0 0 1-5.234 1.705 13.842 13.842 0 0 1-2.173 0 13.842 13.842 0 0 1-5.234-1.705 13.831 13.831 0 0 1-3.546-4.291 13.842 13.842 0 0 1 0-6.666 13.831 13.831 0 0 1 3.546-4.291 13.842 13.842 0 0 1 5.234-1.705Z" /></svg>
+);
+
+export const SubstrateEnhancedIcon = ({className="h-6 w-6"}) => ( // Substrate Enhanced
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" /><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 5.25c5.333 3.333 5.333 8.167 0 11.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 5.25c-5.333 3.333-5.333 8.167 0 11.5" /></svg>
+);
+
+export const ExocortexIntegratorIcon = ({className="h-6 w-6"}) => ( // Exocortex Integrator
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18.828 15.172a9 9 0 0 0-13.656 0M18.828 8.828a9 9 0 0 1-13.656 0" /></svg>
+);
+
+export const DigitalAscendantIcon = ({className="h-6 w-6"}) => ( // Digital Ascendant
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m9.75 3.104 5.25 1.625M16.5 6.375l-5.25 1.625m-3.75 0l-5.25 1.625m10.5-1.625 5.25 1.625M4.5 6.375l5.25 1.625M4.5 17.625l5.25-1.625M9.75 20.896l5.25-1.625m-3.75 0l-5.25-1.625m10.5 1.625 5.25-1.625m-14.25-4.5-5.25-1.625m5.25 1.625 5.25-1.625" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /></svg>
+);
+
+export const DistributedEntityIcon = ({className = "h-6 w-6"}) => ( // Distributed Entity
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1-.7l-.7.7M5.6 18.4l.7-.7m12.1.7l-.7-.7"/>
+        <circle cx="12" cy="12" r="2"/>
+        <path d="M12 14v2a2 2 0 0 0 2 2h2"/>
+        <path d="M10 20h2a2 2 0 0 0 2-2v-2"/>
+        <path d="M12 8V6a2 2 0 0 1 2-2h2"/>
+        <path d="M10 4h2a2 2 0 0 1 2 2v2"/>
+        <path d="M14 12h2a2 2 0 0 1 2 2v2"/>
+        <path d="M20 10v2a2 2 0 0 1-2 2h-2"/>
+        <path d="M8 12H6a2 2 0 0 0-2 2v2"/>
+        <path d="M4 10v2a2 2 0 0 0 2 2h2"/>
+    </svg>
+);
+
+export const StellarMetamorphIcon = ({className="h-6 w-6"}) => ( // Stellar Metamorph
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12a8.25 8.25 0 1 1 16.5 0 8.25 8.25 0 0 1-16.5 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 1.5a10.5 10.5 0 0 0-10.5 10.5v.75" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 22.5a10.5 10.5 0 0 1-10.5-10.5v-.75" /><path strokeLinecap="round" strokeLinejoin="round" d="M1.5 12a10.5 10.5 0 0 0 10.5 10.5h.75" /><path strokeLinecap="round" strokeLinejoin="round" d="M22.5 12a10.5 10.5 0 0 1-10.5 10.5h-.75" /></svg>
+);
+
+// General purpose Memic icon for vectors
+export const MemicIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1-.7l-.7.7M5.6 18.4l.7-.7m12.1.7l-.7-.7"/>
+        <circle cx="12" cy="12" r="2"/>
+        <path d="M12 14v2a2 2 0 0 0 2 2h2"/>
+        <path d="M10 20h2a2 2 0 0 0 2-2v-2"/>
+        <path d="M12 8V6a2 2 0 0 1 2-2h2"/>
+        <path d="M10 4h2a2 2 0 0 1 2 2v2"/>
+        <path d="M14 12h2a2 2 0 0 1 2 2v2"/>
+        <path d="M20 10v2a2 2 0 0 1-2 2h-2"/>
+        <path d="M8 12H6a2 2 0 0 0-2 2v2"/>
+        <path d="M4 10v2a2 2 0 0 0 2 2h2"/>
     </svg>
 );

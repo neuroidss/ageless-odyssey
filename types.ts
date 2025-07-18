@@ -1,5 +1,3 @@
-
-
 // --- WebGPU Type Definitions for Experimental APIs ---
 // These declarations are added to resolve TypeScript errors related to
 // experimental WebGPU features, such as `GPUSupportedFeatures` and `navigator.gpu`.
@@ -41,10 +39,12 @@ declare global {
 
 export type HuggingFaceDevice = 'wasm' | 'webgpu';
 
-export enum SearchType {
-  Articles = "Scientific Articles",
-  Patents = "Patents",
-  BioData = "Biological Data",
+export enum SearchDataSource {
+  PubMed = "PubMed",
+  BioRxivSearch = "bioRxiv (Search)",
+  BioRxivRAG = "bioRxiv (RAG)",
+  GooglePatents = "Google Patents",
+  WebSearch = "Web Search",
 }
 
 export enum ModelProvider {
@@ -149,7 +149,7 @@ export interface Intervention {
     id: string;
     name: string;
     description: string;
-    type: 'biological' | 'radical';
+    type: 'biological' | 'environmental' | 'radical'; // Expanded types
     effects: Record<string, number>; // biomarkerId -> improvementFactor (e.g., 0.1 for 10% improvement)
 }
 
@@ -165,14 +165,16 @@ export interface TrajectoryState {
     };
 }
 
-// --- Gamification: The Ascension Framework ---
+// --- The Ageless Odyssey Framework ---
 
 export enum Realm {
-    MortalBaseline = "Mortal Baseline",
-    OptimizedMortal = "Optimized Mortal",
-    AgeReversalPioneer = "Age Reversal Pioneer",
-    BiologicalEscapeVelocity = "Biological Escape Velocity",
-    SubstrateIndependence = "Substrate Independence",
+    MortalShell = "Mortal Shell",
+    BiologicalOptimizer = "Biological Optimizer",
+    SubstrateEnhanced = "Substrate Enhanced",
+    ExocortexIntegrator = "Exocortex Integrator",
+    DigitalAscendant = "Digital Ascendant",
+    DistributedEntity = "Distributed Entity",
+    StellarMetamorph = "Stellar Metamorph",
 }
 
 export interface Achievement {
@@ -180,10 +182,10 @@ export interface Achievement {
   name: string;
   description: string;
   unlocked: boolean;
-  xp: number; // Keep XP for bonus points/achievements, but not for leveling
+  xp: number; 
 }
 
-export interface GamificationState {
+export interface OdysseyState {
   realm: Realm;
   vectors: {
     genetic: number;  // Represents biological integrity, improved by interventions

@@ -86,8 +86,6 @@ export const applyIntervention = (interventionId: string | null): TrajectoryStat
 
     const intervention = INTERVENTIONS.find(i => i.id === interventionId);
     if (!intervention) return state;
-
-    const isRadical = intervention.type === 'radical';
     
     const baseValues = {
       telomere_length: { start: 7.5, change: -0.05, optimal: 10.0 },
@@ -97,8 +95,8 @@ export const applyIntervention = (interventionId: string | null): TrajectoryStat
       proteostasis: { start: 95, change: -0.7, optimal: 100 },
     };
 
-    if (isRadical && intervention.id === 'full_body_prosthesis') {
-        // Handle the radical full-body replacement
+    // Radical interventions that bypass biology
+    if (intervention.type === 'radical' && intervention.effects.all_biomarkers) {
         const newBiomarkers = state.biomarkers.map(biomarker => {
              const base = baseValues[biomarker.id];
              const optimalProjection = generateProjection(base.optimal, 0); // Flatline at optimal
@@ -110,10 +108,10 @@ export const applyIntervention = (interventionId: string | null): TrajectoryStat
         return { ...state, activeInterventionId: interventionId, isRadicalInterventionActive: true, biomarkers: newBiomarkers, overallScore: {...state.overallScore, interventionProjection: overallInterventionProjection } };
     }
 
-    // Handle biological interventions
+    // Handle biological, environmental, and non-bypassing radical interventions
     const newBiomarkers = state.biomarkers.map(biomarker => {
         const effect = intervention.effects[biomarker.id];
-        if (!effect) return {...biomarker, interventionProjection: undefined, bypassed: false };
+        if (effect === undefined) return {...biomarker, interventionProjection: undefined, bypassed: false };
 
         const baseChange = (biomarker.projection[1].value - biomarker.projection[0].value);
         // Improvement factor reduces the magnitude of negative change or increases positive change

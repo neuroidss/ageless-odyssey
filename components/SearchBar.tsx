@@ -1,7 +1,7 @@
 
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice, type GPUSupportedFeatures } from '../types';
+import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice, type GPUSupportedFeatures, SearchDataSource } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, HUGGING_FACE_DEVICES, HUGGING_FACE_QUANTIZATIONS, DEFAULT_HUGGING_FACE_QUANTIZATION } from '../constants';
 import { AgentIcon, GeneAnalystIcon, CompoundAnalystIcon, GearIcon, ChevronDownIcon, SingularityIcon } from './icons';
 
@@ -24,13 +24,15 @@ interface AgentControlPanelProps {
   setAgentBudget: (budget: number) => void;
   agentCallsMade: number;
   gpuFeatures: GPUSupportedFeatures | null;
+  searchSources: SearchDataSource[];
+  onToggleSearchSource: (source: SearchDataSource) => void;
 }
 
 const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
   topic, setTopic, onDispatchAgent, isLoading, model, setModel, 
   apiKey, onApiKeyChange, quantization, setQuantization, device, setDevice,
   isAutonomousMode, setIsAutonomousMode, agentBudget, setAgentBudget, agentCallsMade,
-  gpuFeatures
+  gpuFeatures, searchSources, onToggleSearchSource
 }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -192,6 +194,25 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                     Usage: <span className="font-bold text-white">{agentCallsMade} / {agentBudget}</span> calls
                   </p>
                </div>
+            </div>
+          </div>
+
+          {/* Data Source Settings */}
+          <div className="p-4 border border-blue-700/50 rounded-lg bg-blue-900/10">
+            <h3 className="text-lg font-bold text-blue-300 mb-2">Data Sources</h3>
+            <p className="text-xs text-slate-400 mb-3">Select sources for agents to search. Affects local models and non-grounded queries. More sources provide better context but may be slower.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {Object.values(SearchDataSource).map(source => (
+                <label key={source} className="flex items-center gap-2 p-2 bg-slate-700/50 rounded-md cursor-pointer hover:bg-slate-600/50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={searchSources.includes(source)}
+                    onChange={() => onToggleSearchSource(source)}
+                    className="form-checkbox h-4 w-4 rounded bg-slate-800 border-slate-500 text-purple-500 focus:ring-purple-500"
+                  />
+                  <span className="text-sm font-medium text-slate-200">{source}</span>
+                </label>
+              ))}
             </div>
           </div>
           
