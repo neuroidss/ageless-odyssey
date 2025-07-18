@@ -59,9 +59,19 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState }> = ({ odysseyState }) 
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${isCurrent ? 'bg-purple-500 border-purple-300 scale-110' : isUnlocked ? 'bg-slate-600 border-slate-500' : 'bg-slate-800 border-slate-700'}`}>
                                     <RealmIcon className={`h-6 w-6 ${isUnlocked ? 'text-slate-100' : 'text-slate-500'}`} />
                                 </div>
-                                <div className="absolute bottom-full mb-2 w-48 p-2 text-center bg-slate-900 border border-slate-600 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
-                                    <h4 className="font-bold text-slate-100">{def.realm}</h4>
-                                    <p className="text-xs text-slate-400 mt-1">{def.description}</p>
+                                <div className="absolute bottom-full mb-2 w-56 p-3 text-left bg-slate-900 border border-slate-600 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
+                                    <h4 className="font-bold text-slate-100 text-center">{def.realm}</h4>
+                                    <p className="text-xs text-slate-400 mt-1 mb-2 text-center">{def.description}</p>
+                                    <div className="mt-2 pt-2 border-t border-slate-700">
+                                        <h5 className="text-xs font-semibold text-slate-300 mb-1">Ascension Criteria:</h5>
+                                        <ul className="list-disc list-inside space-y-1">
+                                            {def.criteria.map(criterion => (
+                                                <li key={criterion} className="text-xs text-slate-400">
+                                                    {criterion}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 </div>
                              </div>
                         );

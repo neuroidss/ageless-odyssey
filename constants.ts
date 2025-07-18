@@ -99,14 +99,77 @@ export const VECTOR_POINTS = {
     }
 };
 
-export const REALM_DEFINITIONS: { realm: Realm; description: string; thresholds: { cognitive: number; genetic: number; memic: number; } }[] = [
-    { realm: Realm.StellarMetamorph, description: "Your form, a vessel of pure energy and data, is no longer limited by conventional physics, ready to traverse the void.", thresholds: { cognitive: 15000, genetic: 15000, memic: 20000 } },
-    { realm: Realm.DistributedEntity, description: "Severing ties to a single instance. Your consciousness exists as a decentralized network across multiple nodes.", thresholds: { cognitive: 9500, genetic: 9000, memic: 10000 } },
-    { realm: Realm.DigitalAscendant, description: "Achieving substrate independence. Your consciousness, now fully digitized, can inhabit simulated realities or portable hardware.", thresholds: { cognitive: 6000, genetic: 5000, memic: 5000 } },
-    { realm: Realm.ExocortexIntegrator, description: "Offloading cognition to a secure, external processing core via a direct neural interface, forming a 'golden core' of knowledge.", thresholds: { cognitive: 3000, genetic: 2500, memic: 1500 } },
-    { realm: Realm.SubstrateEnhanced, description: "Moving beyond baseline biology by integrating basic cybernetics, advanced gene-weaves, and redundant organs.", thresholds: { cognitive: 1500, genetic: 1000, memic: 500 } },
-    { realm: Realm.BiologicalOptimizer, description: "Mastering the body's own systems to achieve peak human health and reverse the core hallmarks of aging.", thresholds: { cognitive: 500, genetic: 200, memic: 100 } },
-    { realm: Realm.MortalShell, description: "The baseline human condition, a fragile vessel subject to the immutable decay of time.", thresholds: { cognitive: 0, genetic: 0, memic: 0 } },
+export const REALM_DEFINITIONS: { realm: Realm; description: string; criteria: string[]; thresholds: { cognitive: number; genetic: number; memic: number; } }[] = [
+    { 
+        realm: Realm.StellarMetamorph, 
+        description: "Your form, a vessel of pure energy and data, is no longer limited by conventional physics, ready to traverse the void.",
+        criteria: [
+            "Manipulate local spacetime curvature.",
+            "Achieve interstellar travel without a physical vessel.",
+            "Cognitive processing capacity on a planetary scale."
+        ],
+        thresholds: { cognitive: 15000, genetic: 15000, memic: 20000 } 
+    },
+    { 
+        realm: Realm.DistributedEntity, 
+        description: "Severing ties to a single instance. Your consciousness exists as a decentralized network across multiple nodes.",
+        criteria: [
+            "Consciousness distributed over >3 independent nodes.",
+            "Demonstrate resilience to single-node failure.",
+            "Achieve consensus reality across instances."
+        ],
+        thresholds: { cognitive: 9500, genetic: 9000, memic: 10000 }
+    },
+    { 
+        realm: Realm.DigitalAscendant, 
+        description: "Achieving substrate independence. Your consciousness, now fully digitized, can inhabit simulated realities or portable hardware.",
+        criteria: [
+            "Full consciousness transfer with >99.9% fidelity.",
+            "Discard biological form as primary vessel.",
+            "Operate within multiple simulated realities simultaneously."
+        ],
+        thresholds: { cognitive: 6000, genetic: 5000, memic: 5000 }
+    },
+    { 
+        realm: Realm.ExocortexIntegrator, 
+        description: "Offloading cognition to a secure, external processing core via a direct neural interface, forming a 'golden core' of knowledge.",
+        criteria: [
+            "Neural interface bandwidth exceeds 10 Gbit/s.",
+            "Offload >50% of cognitive tasks to exocortex.",
+            "Memic vector score surpasses Genetic vector score."
+        ],
+        thresholds: { cognitive: 3000, genetic: 2500, memic: 1500 }
+    },
+    { 
+        realm: Realm.SubstrateEnhanced, 
+        description: "Moving beyond baseline biology by integrating basic cybernetics, advanced gene-weaves, and redundant organs.",
+        criteria: [
+            "Integrate first cybernetic augmentation.",
+            "Activate redundant vital organ systems.",
+            "Develop genetic resistance to cosmic radiation."
+        ],
+        thresholds: { cognitive: 1500, genetic: 1000, memic: 500 }
+    },
+    { 
+        realm: Realm.BiologicalOptimizer, 
+        description: "Mastering the body's own systems to achieve peak human health and reverse the core hallmarks of aging.",
+        criteria: [
+            "Achieve a Longevity Score > 500.",
+            "Halt telomere attrition.",
+            "Reduce senescent cell load to <1%."
+        ],
+        thresholds: { cognitive: 500, genetic: 200, memic: 100 }
+    },
+    { 
+        realm: Realm.MortalShell, 
+        description: "The baseline human condition, a fragile vessel subject to the immutable decay of time.",
+        criteria: [
+            "Standard biological limitations.",
+            "Subject to all hallmarks of aging.",
+            "Cognitive abilities confined to biological brain."
+        ],
+        thresholds: { cognitive: 0, genetic: 0, memic: 0 }
+    },
 ].reverse(); // Reverse to have MortalShell at index 0 for easier progression logic
 
 
