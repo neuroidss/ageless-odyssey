@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { 
     type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, 
     type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice, SearchDataSource, 
-    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition 
+    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition, GeneData 
 } from '../types';
 import { performFederatedSearch, type SearchResult } from './searchService';
 import { generateTextWithHuggingFace } from './huggingFaceService';
@@ -121,28 +121,42 @@ Example JSON structure:
             };
         }
         case AgentType.GeneAnalyst: {
-            let userPrompt = `${contextPreamble}For the research topic "${query}", identify the top 5 most relevant genes discussed in the provided text. Respond with a JSON object with a single key 'genes'. This key should contain an array of objects, where each object has "symbol" (string), "name" (string), and "summary" (string).`;
+            let userPrompt = `${contextPreamble}For the research topic "${query}", analyze the provided search results from the OpenGenes database. Identify the top 5 most relevant genes. For each gene, extract its symbol, full name (from the 'title' field), summary (from the 'snippet' field), organism, lifespan effect, and intervention type directly from the provided 'CONTENT' of each context block. The 'function' should be 'Longevity Activator' if the snippet contains 'pro-longevity', 'Longevity Inhibitor' if it contains 'anti-longevity', and 'Context-Dependent' otherwise. Combine the 'Effect' and lifespan change percentage into the 'lifespanEffect' field.`;
+
             if (isLocalModel) {
-                userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "genes": [\n    {\n      "symbol": "FOXO3",\n      "name": "Forkhead box protein O3",\n      "summary": "A transcription factor involved in stress resistance and longevity."\n    }\n  ]\n}`;
+                 userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "genes": [\n    {\n      "symbol": "FOXO3",\n      "name": "Forkhead box protein O3",\n      "summary": "A key transcription factor that regulates the expression of genes involved in stress resistance, metabolism, and cell apoptosis, strongly linked to exceptional human longevity.",\n      "function": "Longevity Activator",\n      "lifespanEffect": "pro-longevity (+10% to +30%)",\n      "organism": "Homo sapiens",\n      "intervention": "Genetic variant (SNP)"\n    }\n  ]\n}`;
             }
             return {
-                systemInstruction: `You are an AI agent specializing in bioinformatics (OpenGenes AI). Your task is to extract genes related to a query. ${jsonOutputInstruction}`,
+                systemInstruction: `You are a precise data extraction AI. Your task is to analyze structured text from the OpenGenes database and convert it into a specific JSON format. You must extract information *only* from the provided context. ${jsonOutputInstruction}`,
                 userPrompt: userPrompt,
                 responseSchema: {
-                    type: Type.OBJECT, properties: { genes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { symbol: { type: Type.STRING }, name: { type: Type.STRING }, summary: { type: Type.STRING } } } } }
+                    type: Type.OBJECT, properties: { genes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { 
+                        symbol: { type: Type.STRING }, 
+                        name: { type: Type.STRING }, 
+                        summary: { type: Type.STRING },
+                        function: { type: Type.STRING },
+                        lifespanEffect: { type: Type.STRING },
+                        organism: { type: Type.STRING },
+                        intervention: { type: Type.STRING },
+                    } } } }
                 }
             };
         }
         case AgentType.CompoundAnalyst: {
-            let userPrompt = `${contextPreamble}For the research topic "${query}", find the top 5 compounds mentioned in the provided text. Respond with a JSON object with a single key 'compounds'. This key should contain an array of objects, where each object has "name" (string), "mechanism" (string), and "source" (string, e.g., patent number or publication).`;
+             let userPrompt = `${contextPreamble}For the research topic "${query}", analyze the provided patent data to find the top 5 chemical compounds or molecules. For each compound, extract its "name", its primary biological "targetProtein", its "bindingAffinity" (e.g., "IC50 = 10 nM", "Ki = 50 uM", or "activity at 1 uM"), and the "source" patent number (e.g., US11331305B2) which can be found in the URL.`;
              if (isLocalModel) {
-                userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "compounds": [\n    {\n      "name": "Metformin",\n      "mechanism": "Improves insulin sensitivity and mitochondrial function.",\n      "source": "Various studies"\n    }\n  ]\n}`;
+                userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "compounds": [\n    {\n      "name": "N-Octanoyl Carnosine",\n      "targetProtein": "Extracellular matrix components",\n      "bindingAffinity": "Not specified, stimulates formation",\n      "source": "US11331305B2"\n    }\n  ]\n}`;
             }
             return {
-                systemInstruction: `You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract compounds related to a query. ${jsonOutputInstruction}`,
+                systemInstruction: `You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract potential therapeutic compounds, their targets, and binding affinities from patent abstracts. ${jsonOutputInstruction}`,
                 userPrompt: userPrompt,
                 responseSchema: {
-                     type: Type.OBJECT, properties: { compounds: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, mechanism: { type: Type.STRING }, source: { type: Type.STRING } } } } }
+                     type: Type.OBJECT, properties: { compounds: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { 
+                        name: { type: Type.STRING }, 
+                        targetProtein: { type: Type.STRING }, 
+                        bindingAffinity: { type: Type.STRING }, 
+                        source: { type: Type.STRING } 
+                    } } } }
                 }
             };
         }
@@ -245,15 +259,32 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
                 break;
             case AgentType.GeneAnalyst:
                 if (data.genes) {
-                    items = data.genes.map((g: any) => ({
-                        id: `gene-${g.symbol}`, type: 'gene', title: g.symbol, summary: g.summary, details: g.name
-                    }));
+                    items = data.genes.map((g: any) => {
+                        const geneData: GeneData = {
+                            function: g.function || 'N/A',
+                            organism: g.organism || 'N/A',
+                            lifespanEffect: g.lifespanEffect || 'N/A',
+                            intervention: g.intervention || 'N/A',
+                        };
+                        return {
+                            id: `gene-${g.symbol}`, 
+                            type: 'gene', 
+                            title: g.symbol, 
+                            summary: g.summary, 
+                            details: g.name, // Use full name for details
+                            geneData: geneData
+                        };
+                    });
                 }
                 break;
             case AgentType.CompoundAnalyst:
                 if (data.compounds) {
                     items = data.compounds.map((c: any) => ({
-                        id: `compound-${c.name.replace(/\s+/g, '-')}`, type: 'compound', title: c.name, summary: c.mechanism, details: `Source: ${c.source}`
+                        id: `compound-${c.name.replace(/\s+/g, '-')}`, 
+                        type: 'compound', 
+                        title: c.name, 
+                        summary: `Target: ${c.targetProtein || 'N/A'} | Affinity: ${c.bindingAffinity || 'N/A'}`, 
+                        details: `Source: ${c.source}`
                     }));
                 }
                 break;

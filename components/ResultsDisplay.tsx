@@ -1,6 +1,7 @@
 
 
 
+
 import React from 'react';
 import { type WorkspaceState, type WorkspaceItem, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
@@ -93,6 +94,29 @@ const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
         trend: <SingularityIcon className="h-6 w-6 text-purple-400" />,
     };
 
+    const renderGeneDetails = () => {
+        if (item.type !== 'gene' || !item.geneData) return <p className="text-xs text-slate-500 font-mono">{item.details}</p>;
+        const { function: geneFunction, organism, lifespanEffect, intervention } = item.geneData;
+        
+        const detailPill = (label: string, value: string) => (
+          <span className="inline-block bg-slate-700/50 text-slate-300 text-xs font-semibold mr-2 mb-2 px-2.5 py-1 rounded-full">
+            <span className="text-slate-400">{label}:</span> {value}
+          </span>
+        );
+
+        return (
+            <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <p className="text-sm font-bold text-slate-300 mb-2">{item.details}</p>
+                 <div>
+                    {detailPill("Function", geneFunction)}
+                    {detailPill("Organism", organism)}
+                    {detailPill("Effect", lifespanEffect)}
+                    {detailPill("Intervention", intervention)}
+                </div>
+            </div>
+        );
+    };
+
     return (
          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-lg p-5">
             <div className="flex items-start gap-4">
@@ -100,8 +124,8 @@ const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
                 <div className="flex-1">
                     <h3 className="text-lg font-bold text-slate-100 mb-1">{item.title}</h3>
                     <p className="text-slate-400 text-sm capitalize mb-2">Type: {item.type}</p>
-                    <p className="text-slate-300 leading-relaxed mb-3">{item.summary}</p>
-                    <p className="text-xs text-slate-500 font-mono">{item.details}</p>
+                    <p className="text-slate-300 leading-relaxed">{item.summary}</p>
+                    {item.type === 'gene' ? renderGeneDetails() : <p className="text-xs text-slate-500 font-mono mt-3 pt-3 border-t border-slate-700/50">{item.details}</p>}
                 </div>
             </div>
         </div>

@@ -20,12 +20,12 @@ export const HUGGING_FACE_QUANTIZATIONS: {label: string, value: string}[] = [
 export const DEFAULT_HUGGING_FACE_QUANTIZATION: string = 'auto';
 
 export const EXAMPLE_TOPICS = [
-    "Telomere shortening",
-    "Mitochondrial dysfunction",
-    "Cellular senescence",
-    "Epigenetic alterations",
-    "Genomic instability",
-    "Deregulated nutrient-sensing"
+    "SIRT1 activators in patents",
+    "mTOR inhibitors for longevity",
+    "Cellular senescence and NAD+",
+    "Role of FOXO3 in human longevity",
+    "Epigenetic clock reprogramming",
+    "Klotho gene therapy"
 ];
 
 // --- Autonomous Agent Constants ---

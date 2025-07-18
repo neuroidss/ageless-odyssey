@@ -1,7 +1,6 @@
-
-
 import { SearchDataSource } from '../types';
 import { generateEmbeddings } from './huggingFaceService';
+import { searchOpenGenesAPI, type OpenGeneRecord } from './openGenesService';
 
 export interface SearchResult {
     title: string;
@@ -136,57 +135,6 @@ const searchPubMed = async (query: string, addLog: (message: string) => void): P
     return results;
 };
 
-
-/**
- * Searches the bioRxiv pre-print server using its RSS feed. This is CORS-enabled and does not require a proxy.
- */
-const searchBioRxivSimple = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
-    const url = `https://www.biorxiv.org/rss/search/${encodeURIComponent(query)}`;
-    const results: SearchResult[] = [];
-    try {
-        addLog(`[Fetch] Attempting to fetch bioRxiv RSS feed directly (no proxy).`);
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`bioRxiv RSS feed failed with status ${response.status}`);
-        }
-        const xmlText = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xmlText, 'application/xml');
-
-        const parserError = doc.getElementsByTagName('parsererror');
-        if (parserError.length > 0) {
-            throw new Error(`Failed to parse bioRxiv RSS feed. ${parserError[0].textContent}`);
-        }
-        
-        const items = doc.querySelectorAll('item');
-        
-        items.forEach(item => {
-            const titleEl = item.querySelector('title');
-            const linkEl = item.querySelector('link');
-            const descriptionEl = item.querySelector('description'); // The abstract
-            const creatorEls = item.querySelectorAll('dc\\:creator'); // Authors
-            
-            if (titleEl && linkEl) {
-                const authors = Array.from(creatorEls).map(el => el.textContent).join(', ');
-                const title = titleEl.textContent || '';
-                const link = linkEl.textContent || '';
-                const abstract = descriptionEl ? stripTags(descriptionEl.textContent || '') : 'No abstract available.';
-                
-                results.push({
-                    link,
-                    title,
-                    snippet: `Authors: ${authors}. Abstract: ${abstract.substring(0, 250)}...`,
-                    source: SearchDataSource.BioRxivSearch
-                });
-            }
-        });
-        addLog(`[Fetch] Success with bioRxiv RSS feed.`);
-    } catch (error) {
-        addLog(`[Search.BioRxivSimple] Error searching bioRxiv: ${error}`);
-    }
-    return results.slice(0, 5); // Limit to top 5
-};
-
 const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
     if (vecA.length !== vecB.length || vecA.length === 0) {
         return 0;
@@ -206,14 +154,14 @@ const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
 };
 
 const searchBioRxivRAG = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
-    addLog('[Search.BioRxivRAG] Starting RAG-based search...');
-    const url = `https://www.biorxiv.org/rss/search/${encodeURIComponent(query)}`;
+    addLog('[Search.BioRxivRAG] Starting RAG-based search over latest preprints...');
+    // This feed provides the latest articles across all subjects, not a direct search.
+    // The RAG approach will rank these articles for relevance against the query.
+    const url = 'https://connect.biorxiv.org/biorxiv_xml.php?subject=all';
     const articles: { title: string, link: string, abstract: string, authors: string }[] = [];
     try {
-        addLog(`[Search.BioRxivRAG] Fetching feed from ${url}...`);
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`bioRxiv RSS feed failed with status ${response.status}`);
-        
+        addLog(`[Search.BioRxivRAG] Fetching feed from ${url}`);
+        const response = await fetchWithProxy(url, addLog);
         const xmlText = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(xmlText, 'application/xml');
@@ -283,13 +231,23 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
         const jsonText = rawText.substring(rawText.indexOf('{'));
         const data = JSON.parse(jsonText);
         
-        const patents = data.results?.cluster[0]?.result || [];
+        const patents = data.results?.cluster?.[0]?.result || [];
         patents.slice(0, 5).forEach((item: any) => {
-            if (item.patent) {
+            if (item && item.patent) {
+                const patent = item.patent;
+                // Robustly handle inventor and assignee names, which can be arrays or strings.
+                const inventors = (patent.inventor_normalized && Array.isArray(patent.inventor_normalized)) 
+                    ? stripTags(patent.inventor_normalized.join(', ')) 
+                    : (patent.inventor ? stripTags(patent.inventor) : 'N/A');
+
+                const assignees = (patent.assignee_normalized && Array.isArray(patent.assignee_normalized))
+                    ? stripTags(patent.assignee_normalized.join(', '))
+                    : (patent.assignee ? stripTags(patent.assignee) : 'N/A');
+
                 results.push({
-                    link: `https://patents.google.com/patent/${item.patent.publication_number}/en`,
-                    title: stripTags(item.patent.title),
-                    snippet: `Inventor: ${stripTags(item.patent.inventor_normalized.join(', '))}. Assignee: ${stripTags(item.patent.assignee_normalized.join(', '))}. Publication Date: ${item.patent.publication_date}`,
+                    link: `https://patents.google.com/patent/${patent.publication_number}/en`,
+                    title: stripTags(patent.title || 'No Title'),
+                    snippet: `Inventor: ${inventors}. Assignee: ${assignees}. Publication Date: ${patent.publication_date || 'N/A'}`,
                     source: SearchDataSource.GooglePatents
                 });
             }
@@ -298,6 +256,25 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
         addLog(`[Search.Patents] Error searching Google Patents: ${error}`);
     }
     return results;
+};
+
+
+const mapOpenGeneRecordToSearchResult = (record: OpenGeneRecord): SearchResult => {
+    const lifespanChange = (record.lifespan_change_min_percent === record.lifespan_change_max_percent)
+        ? `${record.lifespan_change_max_percent}%`
+        : `${record.lifespan_change_min_percent}% to ${record.lifespan_change_max_percent}%`;
+    
+    // Safely access nested properties from the API response
+    const hallmark = record.hallmarks_of_aging?.[0]?.name || 'N/A';
+    const intervention = record.interventions?.[0]?.intervention_type?.name || 'N/A';
+    const organism = record.organism?.name || 'N/A';
+
+    return {
+        title: `${record.gene_symbol} (${record.gene_name})`,
+        link: `https://open-genes.com/gene/${record.gene_symbol}`,
+        snippet: `Organism: ${organism}. Effect: ${record.lifespan_effect} (${lifespanChange}). Hallmark: ${hallmark}. Intervention: ${intervention}. Summary: ${record.summary_of_the_finding}`,
+        source: SearchDataSource.OpenGenes,
+    };
 };
 
 
@@ -320,10 +297,14 @@ export const performFederatedSearch = async (
     const searchPromises = sources.map(source => {
         switch(source) {
             case SearchDataSource.PubMed: return searchPubMed(query, addLog);
-            case SearchDataSource.BioRxivSearch: return searchBioRxivSimple(query, addLog);
             case SearchDataSource.BioRxivRAG: return searchBioRxivRAG(query, addLog);
             case SearchDataSource.GooglePatents: return searchGooglePatents(query, addLog);
             case SearchDataSource.WebSearch: return searchWeb(query, addLog);
+            case SearchDataSource.OpenGenes:
+                return (async () => {
+                    const openGenesResults = await searchOpenGenesAPI(query, addLog);
+                    return openGenesResults.map(mapOpenGeneRecordToSearchResult);
+                })();
             default: return Promise.resolve([]);
         }
     });

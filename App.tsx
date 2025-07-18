@@ -67,7 +67,7 @@ const createNextWorkspaceState = (
 
 
 const App: React.FC = () => {
-  const [topic, setTopic] = useState<string>('');
+  const [topic, setTopic] = useState<string>('molecules for anti-aging and rejuvenation');
   const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS.find(m => m.id === 'gemini-2.5-flash') || SUPPORTED_MODELS[0]);
   const [quantization, setQuantization] = useState<string>(DEFAULT_HUGGING_FACE_QUANTIZATION);
   const [device, setDevice] = useState<HuggingFaceDevice>(DEFAULT_HUGGING_FACE_DEVICE);
@@ -97,7 +97,7 @@ const App: React.FC = () => {
 
 
   // --- Search Source State ---
-  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.PubMed, SearchDataSource.WebSearch, SearchDataSource.BioRxivSearch]);
+  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.GooglePatents, SearchDataSource.OpenGenes]);
 
 
   // --- Autonomous Mode State ---

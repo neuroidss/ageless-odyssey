@@ -41,10 +41,10 @@ export type HuggingFaceDevice = 'wasm' | 'webgpu';
 
 export enum SearchDataSource {
   PubMed = "PubMed",
-  BioRxivSearch = "bioRxiv (Search)",
   BioRxivRAG = "bioRxiv (RAG)",
   GooglePatents = "Google Patents",
   WebSearch = "Web Search",
+  OpenGenes = "OpenGenes",
 }
 
 export enum ModelProvider {
@@ -73,6 +73,12 @@ export type TrendData = {
     justification: string;
 };
 
+export interface GeneData {
+    function: string;
+    organism: string;
+    lifespanEffect: string;
+    intervention: string;
+}
 
 // A more generic item to hold data from any source
 export interface WorkspaceItem {
@@ -83,6 +89,7 @@ export interface WorkspaceItem {
   details: string; // e.g., Authors, Inventors, Gene ID, Compound Formula
   sourceUri?: string; // Link to pubmed, patent office, etc.
   trendData?: TrendData;
+  geneData?: GeneData;
 }
 
 export interface GroundingSource {
