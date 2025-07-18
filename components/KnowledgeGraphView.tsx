@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { KnowledgeGraph, KnowledgeGraphNode } from '../types';
 import { GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon } from './icons';
@@ -16,7 +17,7 @@ const ATTRACTION_STRENGTH = 0.025;
 const IDEAL_LENGTH_DEFAULT = 150;
 const IDEAL_LENGTH_TOPIC = 220; // Longer links for topic nodes
 const DAMPING = 0.92;
-const CENTER_GRAVITY = 0.02;
+const CENTER_GRAVITY = 0.05;
 
 const NodeIcon: React.FC<{ type: KnowledgeGraphNode['type']; className?: string }> = ({ type, className="h-5 w-5" }) => {
     switch(type) {
