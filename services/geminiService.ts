@@ -207,19 +207,24 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
         switch (agentType) {
             case AgentType.TrendSpotter:
                 if (data.trends) {
-                    items = data.trends.map((t: any) => ({
-                        id: `trend-${t.name.replace(/\s+/g, '-')}`,
-                        type: 'trend',
-                        title: t.name,
-                        summary: t.summary,
-                        details: `Novelty: ${t.novelty}/100 | Velocity: ${t.velocity}/100 | Impact: ${t.impact}/100`,
-                        trendData: {
-                            novelty: t.novelty,
-                            velocity: t.velocity,
-                            impact: t.impact,
-                            justification: t.justification,
-                        }
-                    }));
+                    items = data.trends.map((t: any) => {
+                        const novelty = Number(t.novelty) || 0;
+                        const velocity = Number(t.velocity) || 0;
+                        const impact = Number(t.impact) || 0;
+                        return {
+                            id: `trend-${t.name.replace(/\s+/g, '-')}`,
+                            type: 'trend',
+                            title: t.name,
+                            summary: t.summary,
+                            details: `Novelty: ${novelty}/100 | Velocity: ${velocity}/100 | Impact: ${impact}/100`,
+                            trendData: {
+                                novelty,
+                                velocity,
+                                impact,
+                                justification: t.justification,
+                            }
+                        };
+                    });
                 }
                 if (data.knowledgeGraph) {
                     knowledgeGraph = data.knowledgeGraph;
@@ -291,10 +296,13 @@ export const dispatchAgent = async (
                     uniqueSources = searchResults.map(r => ({ uri: r.link, title: r.title }));
                     addLog(`[Search] Web search successful. Provided ${searchResults.length} results to the model as context.`);
                 } else {
-                    addLog(`[Search] WARN: Web search returned no results. The model will use its internal knowledge only.`);
+                    addLog(`[Search] ERROR: Web search returned no results. Aborting agent dispatch to prevent hallucination.`);
+                    throw new Error("Web search returned no results. Agent dispatch aborted for data reliability.");
                 }
             } catch (searchError) {
-                addLog(`[Search] ERROR: Web search failed. Proceeding without search context. Error: ${searchError}`);
+                const message = searchError instanceof Error ? searchError.message : String(searchError);
+                addLog(`[Search] ERROR: Web search failed. Aborting agent dispatch. Error: ${message}`);
+                throw new Error(`Web search failed, cannot proceed with local model. Error: ${message}`);
             }
         } else {
             addLog(`[Search] Google AI model detected. Skipping local search, will use Google Search grounding.`);

@@ -1,14 +1,15 @@
 
 
 
-import React, { useState, useCallback, useEffect } from 'react';
+
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { 
     SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS, 
     DEFAULT_HUGGING_FACE_DEVICE, DEFAULT_HUGGING_FACE_QUANTIZATION, 
-    AUTONOMOUS_AGENT_QUERY, DEFAULT_AGENT_BUDGET, AUTONOMOUS_INTERVAL_MS 
+    AUTONOMOUS_AGENT_QUERY, DEFAULT_AGENT_BUDGET
 } from './constants';
 import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
@@ -98,6 +99,9 @@ const App: React.FC = () => {
   const [isAutonomousLoading, setIsAutonomousLoading] = useState<boolean>(false);
   const [agentBudget, setAgentBudget] = useState<number>(DEFAULT_AGENT_BUDGET);
   const [agentCallsMade, setAgentCallsMade] = useState<number>(0);
+  const [budgetResetTimestamp, setBudgetResetTimestamp] = useState<number>(0);
+  const autonomousTimerRef = useRef<number | null>(null);
+
 
   const [debugLog, setDebugLog] = useState<string[]>([]);
     
@@ -142,6 +146,16 @@ const App: React.FC = () => {
             if (savedState.isAutonomousMode) setIsAutonomousMode(savedState.isAutonomousMode);
             if (savedState.agentBudget) setAgentBudget(savedState.agentBudget);
             if (savedState.agentCallsMade) setAgentCallsMade(savedState.agentCallsMade);
+            const savedTimestamp = savedState.budgetResetTimestamp || 0;
+            const now = Date.now();
+            const oneDay = 24 * 60 * 60 * 1000;
+            if(now - savedTimestamp > oneDay) {
+                addLog("Daily budget cycle expired. Resetting calls for new cycle.");
+                setAgentCallsMade(0);
+                setBudgetResetTimestamp(now);
+            } else {
+                setBudgetResetTimestamp(savedTimestamp);
+            }
 
             addLog("Successfully restored application state from previous session.");
         } else {
@@ -151,6 +165,7 @@ const App: React.FC = () => {
             const biologicalAge = initialState.overallScore.projection[0].value;
             const longevityScore = Math.max(0, (100 - biologicalAge) * 10);
             setGamification(prev => ({...prev, longevityScore, vectors: {...prev.vectors, cognitive: longevityScore}}));
+            setBudgetResetTimestamp(Date.now());
             addLog("No saved state found. Initialized new session.");
         }
     } catch (error) {
@@ -172,13 +187,13 @@ const App: React.FC = () => {
             topic, model, quantization, device,
             workspaceHistory, hasSearched, trajectoryState, gamification,
             exploredTopics: Array.from(exploredTopics),
-            isAutonomousMode, agentBudget, agentCallsMade,
+            isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp,
         };
         localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (error) {
         addLog(`Error saving state to localStorage: ${error}`);
     }
-  }, [topic, model, quantization, device, workspaceHistory, hasSearched, trajectoryState, gamification, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade]);
+  }, [topic, model, quantization, device, workspaceHistory, hasSearched, trajectoryState, gamification, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp]);
 
 
   const handleApiKeyChange = (key: string) => {
@@ -263,59 +278,102 @@ const App: React.FC = () => {
   
   // Effect for Autonomous Agent
   useEffect(() => {
-    if (!isAutonomousMode) return;
+    if (autonomousTimerRef.current) {
+        clearTimeout(autonomousTimerRef.current);
+        autonomousTimerRef.current = null;
+    }
 
-    let intervalId: number | undefined;
-
-    const runAutonomousAgent = async () => {
-      if (agentCallsMade >= agentBudget) {
-        addLog("[Autonomous] Daily budget reached. Stopping periodic checks.");
-        if (intervalId) clearInterval(intervalId);
-        setIsAutonomousLoading(false);
+    if (!isAutonomousMode) {
+        addLog("[Autonomous] Mode is disabled. Stopping all scheduled tasks.");
         return;
-      }
-      
-      addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
-      setIsAutonomousLoading(true);
+    }
 
-      try {
-        const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device);
-        addLog(`[Autonomous] Agent finished. Found ${response.items.length} new items.`);
+    const scheduleNextAutonomousCall = () => {
+        const now = Date.now();
+        const oneDay = 24 * 60 * 60 * 1000;
+        let currentTimestamp = budgetResetTimestamp;
+        let currentCallsMade = agentCallsMade;
+
+        if (now - currentTimestamp > oneDay) {
+            addLog("[Autonomous] New 24-hour cycle started. Resetting budget.");
+            currentTimestamp = now;
+            currentCallsMade = 0;
+            setBudgetResetTimestamp(now);
+            setAgentCallsMade(0);
+        }
         
-        if (response.items.length > 0) {
-            setHasSearched(prev => prev ? prev : true);
-            const lastWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
-            const newWorkspace = createNextWorkspaceState(AUTONOMOUS_AGENT_QUERY, lastWorkspace, response);
-            
-            setWorkspaceHistory(prev => [...prev, newWorkspace]);
-            setTimeLapseIndex(workspaceHistory.length);
+        const callsRemaining = agentBudget - currentCallsMade;
 
-            response.items.forEach(item => {
-                if (item.type === 'trend' && item.trendData) {
-                    updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
-                }
-            });
-            setAgentCallsMade(prev => prev + 1);
+        if (callsRemaining <= 0) {
+            addLog(`[Autonomous] Budget of ${agentBudget} exhausted. Checking again at start of next cycle.`);
+            const timeUntilNextCycle = (currentTimestamp + oneDay) - now;
+            autonomousTimerRef.current = window.setTimeout(scheduleNextAutonomousCall, timeUntilNextCycle > 0 ? timeUntilNextCycle + 1000 : 1000);
+            return;
         }
 
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
-        addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
-      } finally {
-        setIsAutonomousLoading(false);
-      }
+        const timeElapsedToday = now - currentTimestamp;
+        const timeRemainingToday = oneDay - timeElapsedToday;
+
+        if (timeRemainingToday <= 0) {
+            addLog("[Autonomous] End of 24-hour cycle. Re-evaluating schedule.");
+            autonomousTimerRef.current = window.setTimeout(scheduleNextAutonomousCall, 1000);
+            return;
+        }
+        
+        const interval = timeRemainingToday / callsRemaining;
+        addLog(`[Autonomous] Calls remaining: ${callsRemaining}/${agentBudget}. Time left in cycle: ${(timeRemainingToday / 3600000).toFixed(1)}h. Next call in ${(interval / 60000).toFixed(1)} mins.`);
+        autonomousTimerRef.current = window.setTimeout(runAutonomousAgent, interval);
     };
 
-    runAutonomousAgent();
-    intervalId = window.setInterval(runAutonomousAgent, AUTONOMOUS_INTERVAL_MS);
+    const runAutonomousAgent = async () => {
+        if (agentCallsMade >= agentBudget) {
+            setIsAutonomousLoading(false);
+            scheduleNextAutonomousCall();
+            return;
+        }
+        
+        addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
+        setIsAutonomousLoading(true);
+
+        try {
+            const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device);
+            addLog(`[Autonomous] Agent finished. Found ${response.items.length} new items.`);
+            setAgentCallsMade(prev => prev + 1);
+            
+            if (response.items.length > 0) {
+                setHasSearched(prev => prev ? prev : true);
+                setWorkspaceHistory(prevHistory => {
+                    const lastWorkspace = prevHistory.length > 0 ? prevHistory[prevHistory.length - 1] : null;
+                    const newWorkspace = createNextWorkspaceState(AUTONOMOUS_AGENT_QUERY, lastWorkspace, response);
+                    setTimeLapseIndex(prevHistory.length);
+                    return [...prevHistory, newWorkspace];
+                });
+
+                response.items.forEach(item => {
+                    if (item.type === 'trend' && item.trendData) {
+                        updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
+                    }
+                });
+            }
+        } catch (e) {
+            const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
+            addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
+        } finally {
+            setIsAutonomousLoading(false);
+            scheduleNextAutonomousCall();
+        }
+    };
+
+    addLog("[Autonomous] Mode activated. Scheduling first call.");
+    scheduleNextAutonomousCall();
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        addLog("[Autonomous] Mode deactivated. Interval cleared.");
-      }
+        if (autonomousTimerRef.current) {
+            clearTimeout(autonomousTimerRef.current);
+            addLog("[Autonomous] Cleanup: Timer cleared due to state change or unmount.");
+        }
     };
-  }, [isAutonomousMode, agentBudget, agentCallsMade, model, quantization, apiKey, device, addLog, updateAscensionState, workspaceHistory]);
+  }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, addLog, updateAscensionState]);
 
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
@@ -471,8 +529,9 @@ const App: React.FC = () => {
 
   const handleResetBudget = useCallback(() => {
     setAgentCallsMade(0);
-    addLog("Autonomous agent daily budget has been reset.");
-    setToasts(prev => [...prev, {id: Date.now(), title: "Budget Reset", message: "Autonomous agent call count is now 0."}]);
+    setBudgetResetTimestamp(Date.now());
+    addLog("Autonomous agent daily budget and 24-hour timer have been reset.");
+    setToasts(prev => [...prev, {id: Date.now(), title: "Budget Reset", message: "Agent call count is 0 and 24-hour cycle restarted."}]);
   }, [addLog]);
 
   const dismissToast = (id: number) => {

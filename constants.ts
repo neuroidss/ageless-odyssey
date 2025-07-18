@@ -32,7 +32,6 @@ export const EXAMPLE_TOPICS = [
 // --- Autonomous Agent Constants ---
 export const AUTONOMOUS_AGENT_QUERY = "radical life extension and rejuvenation biotechnology";
 export const DEFAULT_AGENT_BUDGET = 10;
-export const AUTONOMOUS_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 
 export const SUPPORTED_MODELS: ModelDefinition[] = [
