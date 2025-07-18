@@ -1,5 +1,43 @@
 
 
+// --- WebGPU Type Definitions for Experimental APIs ---
+// These declarations are added to resolve TypeScript errors related to
+// experimental WebGPU features, such as `GPUSupportedFeatures` and `navigator.gpu`.
+
+export type GPUFeatureName =
+    | 'depth-clip-control'
+    | 'depth24unorm-stencil8'
+    | 'depth32float-stencil8'
+    | 'texture-compression-bc'
+    | 'texture-compression-etc2'
+    | 'texture-compression-astc'
+    | 'timestamp-query'
+    | 'indirect-first-instance'
+    | 'shader-f16'
+    | 'rg11b10ufloat-renderable';
+
+export interface GPUSupportedFeatures extends ReadonlySet<GPUFeatureName> {}
+
+export interface GPUAdapter {
+    readonly features: GPUSupportedFeatures;
+    requestDevice(): Promise<GPUDevice>;
+}
+
+export interface GPUDevice {}
+
+export interface GPU {
+    requestAdapter(): Promise<GPUAdapter | null>;
+}
+
+// Augment the global Navigator interface
+declare global {
+    interface Navigator {
+        readonly gpu?: GPU;
+    }
+}
+
+// --- End WebGPU Type Definitions ---
+
 
 export type HuggingFaceDevice = 'wasm' | 'webgpu';
 

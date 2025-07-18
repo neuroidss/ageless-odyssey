@@ -1,9 +1,6 @@
 
-
-
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse } from './types';
+import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, GamificationState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures } from './types';
 import { dispatchAgent, synthesizeFindings } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
 import { 
@@ -93,6 +90,7 @@ const App: React.FC = () => {
   const [gamification, setGamification] = useState<GamificationState>(getInitialGamificationState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
+  const [gpuFeatures, setGpuFeatures] = useState<GPUSupportedFeatures | null>(null);
 
   // --- Autonomous Mode State ---
   const [isAutonomousMode, setIsAutonomousMode] = useState<boolean>(false);
@@ -113,6 +111,30 @@ const App: React.FC = () => {
   }, []);
 
   // --- State Persistence ---
+  useEffect(() => {
+    async function checkGpuFeatures() {
+        if (navigator.gpu) {
+            try {
+                const adapter = await navigator.gpu.requestAdapter();
+                if (adapter) {
+                    setGpuFeatures(adapter.features);
+                    addLog(`[GPU Check] WebGPU supported features: ${Array.from(adapter.features).join(', ')}`);
+                    if (!adapter.features.has('shader-f16')) {
+                         addLog(`[GPU Check] WARN: This device/browser does not support 'shader-f16'. Quantizations using f16 (fp16, q4f16) will be disabled for WebGPU.`);
+                    }
+                } else {
+                    addLog('[GPU Check] WebGPU supported, but no adapter found. Could be due to power settings or OS restrictions.');
+                }
+            } catch (e) {
+                const message = e instanceof Error ? e.message : String(e);
+                addLog(`[GPU Check] Error requesting WebGPU adapter: ${message}`);
+            }
+        } else {
+            addLog('[GPU Check] WebGPU API not found in this browser.');
+        }
+    }
+    checkGpuFeatures();
+  }, [addLog]);
 
   // Load state from localStorage on initial mount
   useEffect(() => {
@@ -362,179 +384,215 @@ const App: React.FC = () => {
     };
   }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, addLog, updateAscensionState]);
 
+  const handleTimeLapseChange = (index: number) => {
+    setTimeLapseIndex(index);
+    addLog(`Time-lapsed to history snapshot #${index+1}.`);
+  };
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {
-    if (!topic.trim()) { addLog(`[handleDispatchAgent] Aborted: topic is empty.`); return; }
-    
-    addLog(`[handleDispatchAgent] Processing topic: "${topic}"`);
-    updateAscensionState('DISPATCH_AGENT');
-    if (!gamification.achievements.FIRST_RESEARCH.unlocked) {
-        setGamification(prev => ({...prev, achievements: {...prev.achievements, FIRST_RESEARCH: {...prev.achievements.FIRST_RESEARCH, unlocked: true}}}));
-        setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Budding Scientist", icon: 'achievement'}]);
+    if (!topic) {
+        setError("Please enter a research topic first.");
+        return;
+    }
+    if (model.provider === ModelProvider.GoogleAI && !apiKey && !process.env.API_KEY) {
+        setError("Please enter your Google AI API Key in the settings to use this model.");
+        return;
     }
 
     setIsLoading(true);
     setError(null);
-    setLoadingMessage('Dispatching Agent...');
-    if (!hasSearched) setHasSearched(true);
-    
-    const lastWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
+    setSynthesisError(null);
+    setLoadingMessage(`Dispatching ${agentType}...`);
+    addLog(`Dispatching agent '${agentType}' for topic: "${topic}"`);
+
+    const isNewTopic = !exploredTopics.has(topic);
+    if (isNewTopic) {
+        setExploredTopics(prev => new Set(prev).add(topic));
+        updateAscensionState('NEW_TOPIC');
+        if (Array.from(exploredTopics).length + 1 >= 3) {
+            setGamification(prev => {
+                if (!prev.achievements.HALLMARK_EXPLORER.unlocked) {
+                    setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Hallmark Explorer", icon: 'achievement' }]);
+                    return {...prev, achievements: {...prev.achievements, HALLMARK_EXPLORER: {...prev.achievements.HALLMARK_EXPLORER, unlocked: true}}};
+                }
+                return prev;
+            })
+        }
+    }
 
     try {
-      const response = await dispatchAgent(topic, agentType, model, quantization, addLog, apiKey, device, setLoadingMessage);
-      addLog(`Agent "${agentType}" finished. Found ${response.items.length} items.`);
+      const response = await dispatchAgent(
+        topic,
+        agentType,
+        model,
+        quantization,
+        addLog,
+        apiKey,
+        device,
+        (msg) => setLoadingMessage(msg)
+      );
       
-      const newWorkspace = createNextWorkspaceState(topic, lastWorkspace, response);
+      addLog(`Agent '${agentType}' finished. Found ${response.items.length} items and ${response.sources?.length || 0} sources.`);
       
-      response.items.forEach(item => {
-          if (item.type === 'trend' && item.trendData) updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
-      });
-      if (newWorkspace.knowledgeGraph && newWorkspace.knowledgeGraph.nodes.length > (lastWorkspace?.knowledgeGraph?.nodes.length ?? 0)) {
-           if (!gamification.achievements.KNOWLEDGE_ARCHITECT.unlocked && newWorkspace.knowledgeGraph.nodes.length >= 5) {
-              setGamification(prev => ({...prev, achievements: {...prev.achievements, KNOWLEDGE_ARCHITECT: {...prev.achievements.KNOWLEDGE_ARCHITECT, unlocked: true}}}));
-              setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Knowledge Architect", icon: 'achievement'}]);
-          }
-          const nodesAdded = newWorkspace.knowledgeGraph.nodes.length - (lastWorkspace?.knowledgeGraph?.nodes.length ?? 0);
-          if (nodesAdded > 0) updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
+      const previousWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
+      const newWorkspace = createNextWorkspaceState(topic, previousWorkspace, response);
+
+      // Memic point updates
+      updateAscensionState('DISPATCH_AGENT');
+      if (!gamification.achievements.FIRST_RESEARCH.unlocked) {
+            setGamification(prev => {
+                setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Budding Scientist", icon: 'achievement' }]);
+                return {...prev, achievements: {...prev.achievements, FIRST_RESEARCH: {...prev.achievements.FIRST_RESEARCH, unlocked: true}}};
+            });
       }
 
+      if (response.knowledgeGraph) {
+          const nodesAdded = newWorkspace.knowledgeGraph!.nodes.length - (previousWorkspace?.knowledgeGraph?.nodes.length || 0);
+          updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded });
+          if (newWorkspace.knowledgeGraph!.nodes.length >= 5 && !gamification.achievements.KNOWLEDGE_ARCHITECT.unlocked) {
+                setGamification(prev => {
+                    setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Knowledge Architect", icon: 'achievement' }]);
+                    return {...prev, achievements: {...prev.achievements, KNOWLEDGE_ARCHITECT: {...prev.achievements.KNOWLEDGE_ARCHITECT, unlocked: true}}};
+                });
+          }
+      }
+      response.items.forEach(item => {
+        if (item.type === 'trend' && item.trendData) {
+            updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
+        }
+      });
+      
       setWorkspaceHistory(prev => [...prev, newWorkspace]);
       setTimeLapseIndex(workspaceHistory.length);
-
+      setHasSearched(true);
+      
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'An unknown agent error occurred.';
-      addLog(`ERROR in handleDispatchAgent: ${msg}`);
-      if (model.provider === ModelProvider.HuggingFace && (msg.includes('Failed to fetch') || msg.includes('Failed to run model'))) {
-           setError('Failed to load the Hugging Face model. This can be caused by a network issue, an ad blocker, or a temporary problem with the model servers. Please check your connection, disable browser extensions like ad blockers, and try again. If the problem persists, try selecting a different model.');
-      } else {
-          setError(msg);
-      }
+      const message = e instanceof Error ? e.message : 'An unknown error occurred.';
+      setError(message);
+      addLog(`ERROR during agent dispatch: ${message}`);
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [topic, model, quantization, device, apiKey, hasSearched, workspaceHistory, updateAscensionState, addLog, gamification.achievements]);
-
+  }, [topic, model, quantization, apiKey, device, addLog, workspaceHistory, gamification.achievements, exploredTopics, updateAscensionState]);
+  
   const handleSynthesize = useCallback(async () => {
     const currentWorkspace = workspaceHistory[timeLapseIndex];
-    if (!currentWorkspace?.items || currentWorkspace.items.length === 0) return;
-
-    addLog(`Synthesizing findings for "${currentWorkspace.topic}"...`);
-    updateAscensionState('SYNTHESIZE');
-    if (!gamification.achievements.SYNTHESIZER.unlocked) {
-        setGamification(prev => ({...prev, achievements: {...prev.achievements, SYNTHESIZER: {...prev.achievements.SYNTHESIZER, unlocked: true}}}));
-        setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "The Synthesizer", icon: 'achievement'}]);
-    }
+    if (!currentWorkspace || currentWorkspace.items.length === 0) return;
     
     setIsSynthesizing(true);
     setSynthesisError(null);
-    setWorkspaceHistory(prev => {
-      const newHistory = [...prev];
-      if (newHistory[timeLapseIndex]) {
-        newHistory[timeLapseIndex] = {...newHistory[timeLapseIndex], synthesis: null};
-      }
-      return newHistory;
-    });
-
-
+    addLog(`Synthesizing ${currentWorkspace.items.length} items...`);
+    
     try {
-      const response = await synthesizeFindings(currentWorkspace.topic || topic, currentWorkspace.items, model, quantization, addLog, apiKey, device);
-      addLog('Synthesis complete.');
-      setWorkspaceHistory(prev => {
-        const newHistory = [...prev];
-        if (newHistory[timeLapseIndex]) {
-          newHistory[timeLapseIndex] = {...newHistory[timeLapseIndex], synthesis: response};
-        }
-        return newHistory;
-      });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'An unknown error occurred during synthesis.';
-      addLog(`ERROR during synthesis: ${msg}`);
-      setSynthesisError(msg);
-    } finally {
-      setIsSynthesizing(false);
-    }
-  }, [workspaceHistory, timeLapseIndex, topic, model, quantization, device, updateAscensionState, addLog, apiKey, gamification.achievements]);
-  
-    const handleTopicChange = (newTopic: string) => {
-        setTopic(newTopic);
-        const newTopicLower = newTopic.toLowerCase().trim();
-        const exploredTopicsLower = new Set(Array.from(exploredTopics).map(t => t.toLowerCase().trim()));
+        const synthesisText = await synthesizeFindings(currentWorkspace.topic, currentWorkspace.items, model, quantization, addLog, apiKey, device);
+        addLog(`Synthesis successful. Length: ${synthesisText.length}`);
         
-        if (newTopicLower && !exploredTopicsLower.has(newTopicLower)) {
-            const newExplored = new Set(exploredTopics).add(newTopic);
-            setExploredTopics(newExplored);
-            updateAscensionState('NEW_TOPIC');
-            if (newExplored.size >= 3 && !gamification.achievements.HALLMARK_EXPLORER.unlocked) {
-                setGamification(prev => ({...prev, achievements: {...prev.achievements, HALLMARK_EXPLORER: {...prev.achievements.HALLMARK_EXPLORER, unlocked: true}}}));
-                setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Hallmark Explorer", icon: 'achievement'}]);
-            }
+        setWorkspaceHistory(prev => {
+            const newHistory = [...prev];
+            newHistory[timeLapseIndex] = { ...newHistory[timeLapseIndex], synthesis: synthesisText, timestamp: Date.now() };
+            return newHistory;
+        });
+
+        updateAscensionState('SYNTHESIZE');
+        if (!gamification.achievements.SYNTHESIZER.unlocked) {
+            setGamification(prev => {
+                setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "The Synthesizer", icon: 'achievement' }]);
+                return {...prev, achievements: {...prev.achievements, SYNTHESIZER: {...prev.achievements.SYNTHESIZER, unlocked: true}}};
+            });
         }
-    }
-
-  const handleApplyIntervention = useCallback((interventionId: string | null) => {
-      const intervention = INTERVENTIONS.find(i => i.id === interventionId);
-      const updatedState = applyIntervention(interventionId);
-      setTrajectoryState(updatedState);
-      addLog(`Applied intervention: ${intervention?.name || 'None'}`);
-      
-      if (!gamification.achievements.BIO_STRATEGIST.unlocked && interventionId) {
-          setGamification(prev => ({...prev, achievements: {...prev.achievements, BIO_STRATEGIST: {...prev.achievements.BIO_STRATEGIST, unlocked: true}}}));
-          setToasts(prev => [...prev, {id: Date.now(), title: "Achievement Unlocked!", message: "Bio-Strategist", icon: 'achievement'}]);
-      }
-      
-      if (intervention?.type === 'radical') {
-          if (!gamification.achievements.TRANSHUMANIST.unlocked) {
-               updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: updatedState.overallScore.projection[0].value, isRadical: true });
-          }
-      }
-  }, [gamification.achievements, updateAscensionState, addLog]);
-
-    // Effect to update score and check achievements when trajectory changes
-  useEffect(() => {
-    if (trajectoryState) {
-        const biologicalAge = trajectoryState.overallScore.projection[0].value;
-        let interventionEffect = 0;
-        let isRadical = trajectoryState.isRadicalInterventionActive;
-        if (trajectoryState.activeInterventionId && trajectoryState.overallScore.interventionProjection) {
-            const baselineFuture = trajectoryState.overallScore.projection[10].value;
-            const interventionFuture = trajectoryState.overallScore.interventionProjection[10].value;
-            interventionEffect = baselineFuture - interventionFuture;
+        
+        // After synthesis, if no trajectory state exists, initialize it.
+        if (!trajectoryState) {
+            const initialState = getInitialTrajectory();
+            setTrajectoryState(initialState);
+            const biologicalAge = initialState.overallScore.projection[0].value;
+            updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge });
+             if (initialState.overallScore.projection[0].value <= 45 && !gamification.achievements.SCORE_MILESTONE_1.unlocked) { // This condition is based on Longevity Score > 550
+                setGamification(prev => {
+                    setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Longevity Adept", icon: 'achievement' }]);
+                    return {...prev, achievements: {...prev.achievements, SCORE_MILESTONE_1: {...prev.achievements.SCORE_MILESTONE_1, unlocked: true}}};
+                });
+             }
         }
-        updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge, interventionEffect, isRadical });
-    }
-  }, [trajectoryState, updateAscensionState]);
-  
-  const handleResetState = useCallback(() => {
-    if (window.confirm("Are you sure you want to reset all your progress and saved data? This action cannot be undone.")) {
-        localStorage.removeItem(APP_STATE_STORAGE_KEY);
-        sessionStorage.removeItem('google-api-key');
-        addLog("User triggered a full state reset. Reloading the application...");
-        window.location.reload();
-    }
-  }, [addLog]);
 
-  const handleResetBudget = useCallback(() => {
-    setAgentCallsMade(0);
-    setBudgetResetTimestamp(Date.now());
-    addLog("Autonomous agent daily budget and 24-hour timer have been reset.");
-    setToasts(prev => [...prev, {id: Date.now(), title: "Budget Reset", message: "Agent call count is 0 and 24-hour cycle restarted."}]);
-  }, [addLog]);
+    } catch(e) {
+        const message = e instanceof Error ? e.message : 'An unknown error occurred.';
+        setSynthesisError(message);
+        addLog(`ERROR during synthesis: ${message}`);
+    } finally {
+        setIsSynthesizing(false);
+    }
+  }, [workspaceHistory, timeLapseIndex, model, quantization, apiKey, device, addLog, updateAscensionState, gamification.achievements, trajectoryState]);
 
-  const dismissToast = (id: number) => {
-    setToasts(currentToasts => currentToasts.filter(t => t.id !== id));
+  const handleApplyIntervention = (interventionId: string | null) => {
+    const newState = applyIntervention(interventionId);
+    setTrajectoryState(newState);
+    
+    // Gamification update
+    if (interventionId) {
+        const intervention = INTERVENTIONS.find(i => i.id === interventionId)!;
+        const oldBioAge = trajectoryState?.overallScore.projection[0].value || 100;
+        const newBioAge = newState.overallScore.interventionProjection![0].value;
+        const interventionEffect = (oldBioAge - newBioAge) / oldBioAge;
+
+        updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: newBioAge, interventionEffect: interventionEffect, isRadical: intervention.type === 'radical' });
+
+        if (!gamification.achievements.BIO_STRATEGIST.unlocked) {
+            setGamification(prev => {
+                setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Bio-Strategist", icon: 'achievement' }]);
+                return {...prev, achievements: {...prev.achievements, BIO_STRATEGIST: {...prev.achievements.BIO_STRATEGIST, unlocked: true}}};
+            });
+        }
+    } else {
+        // Resetting to baseline
+        const baseBioAge = newState.overallScore.projection[0].value;
+        updateAscensionState('UPDATE_TRAJECTORY', { biologicalAge: baseBioAge, interventionEffect: 0, isRadical: false });
+    }
+    
+    addLog(`Applied intervention: ${interventionId || 'None'}`);
   };
 
+  const handleResetProgress = () => {
+    if (window.confirm("Are you sure you want to reset all progress? This will clear your workspace, trajectory, and achievements.")) {
+        localStorage.removeItem(APP_STATE_STORAGE_KEY);
+        setTopic('');
+        setWorkspaceHistory([]);
+        setTimeLapseIndex(0);
+        setHasSearched(false);
+        setError(null);
+        setSynthesisError(null);
+        setTrajectoryState(getInitialTrajectory());
+        setGamification(getInitialGamificationState());
+        setExploredTopics(new Set());
+        setIsAutonomousMode(false);
+        setAgentBudget(DEFAULT_AGENT_BUDGET);
+        setAgentCallsMade(0);
+        setBudgetResetTimestamp(Date.now());
+        addLog("Application state has been reset.");
+        window.location.reload();
+    }
+  };
+  
+  const handleResetBudget = () => {
+    if (window.confirm("Reset the daily autonomous agent call budget? This is for debugging purposes.")) {
+        setAgentCallsMade(0);
+        setBudgetResetTimestamp(Date.now());
+        addLog("Autonomous agent budget reset for the current cycle.");
+    }
+  };
+
+  const currentWorkspace = workspaceHistory[timeLapseIndex];
+
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 font-sans">
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <main className="container mx-auto px-4">
+    <main className="min-h-screen text-slate-200">
+      <div className="container mx-auto px-4 py-8">
         <Header gamification={gamification} />
         <AgentControlPanel
           topic={topic}
-          setTopic={handleTopicChange}
+          setTopic={setTopic}
           onDispatchAgent={handleDispatchAgent}
-          isLoading={isLoading}
+          isLoading={isLoading || isSynthesizing}
           model={model}
           setModel={handleModelChange}
           apiKey={apiKey}
@@ -548,29 +606,32 @@ const App: React.FC = () => {
           agentBudget={agentBudget}
           setAgentBudget={setAgentBudget}
           agentCallsMade={agentCallsMade}
+          gpuFeatures={gpuFeatures}
         />
-        <div className="mt-4">
-          <WorkspaceView
-            workspace={workspaceHistory[timeLapseIndex]}
-            workspaceHistory={workspaceHistory}
-            timeLapseIndex={timeLapseIndex}
-            onTimeLapseChange={setTimeLapseIndex}
-            isLoading={isLoading && workspaceHistory.length === 0}
-            loadingMessage={loadingMessage}
-            error={error}
-            hasSearched={hasSearched}
-            isSynthesizing={isSynthesizing}
-            synthesisError={synthesisError}
-            onSynthesize={handleSynthesize}
-            trajectoryState={trajectoryState}
-            onApplyIntervention={handleApplyIntervention}
-            isAutonomousMode={isAutonomousMode}
-            isAutonomousLoading={isAutonomousLoading}
-          />
-        </div>
-      </main>
-      <DebugLogView logs={debugLog} onReset={handleResetState} onResetBudget={handleResetBudget} />
-    </div>
+        <WorkspaceView
+          workspace={currentWorkspace}
+          workspaceHistory={workspaceHistory}
+          timeLapseIndex={timeLapseIndex}
+          onTimeLapseChange={handleTimeLapseChange}
+          isLoading={isLoading}
+          error={error}
+          hasSearched={hasSearched}
+          isSynthesizing={isSynthesizing}
+          synthesisError={synthesisError}
+          onSynthesize={handleSynthesize}
+          trajectoryState={trajectoryState}
+          onApplyIntervention={handleApplyIntervention}
+          loadingMessage={loadingMessage}
+          isAutonomousMode={isAutonomousMode}
+          isAutonomousLoading={isAutonomousLoading}
+        />
+      </div>
+      <ToastContainer 
+        toasts={toasts}
+        onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))}
+      />
+      <DebugLogView logs={debugLog} onReset={handleResetProgress} onResetBudget={handleResetBudget} />
+    </main>
   );
 };
 

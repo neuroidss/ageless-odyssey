@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
-import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice } from '../types';
-import { EXAMPLE_TOPICS, SUPPORTED_MODELS, HUGGING_FACE_DEVICES, HUGGING_FACE_QUANTIZATIONS } from '../constants';
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { AgentType, ModelProvider, type ModelDefinition, HuggingFaceDevice, type GPUSupportedFeatures } from '../types';
+import { EXAMPLE_TOPICS, SUPPORTED_MODELS, HUGGING_FACE_DEVICES, HUGGING_FACE_QUANTIZATIONS, DEFAULT_HUGGING_FACE_QUANTIZATION } from '../constants';
 import { AgentIcon, GeneAnalystIcon, CompoundAnalystIcon, GearIcon, ChevronDownIcon, SingularityIcon } from './icons';
 
 interface AgentControlPanelProps {
@@ -22,12 +23,14 @@ interface AgentControlPanelProps {
   agentBudget: number;
   setAgentBudget: (budget: number) => void;
   agentCallsMade: number;
+  gpuFeatures: GPUSupportedFeatures | null;
 }
 
 const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
   topic, setTopic, onDispatchAgent, isLoading, model, setModel, 
   apiKey, onApiKeyChange, quantization, setQuantization, device, setDevice,
-  isAutonomousMode, setIsAutonomousMode, agentBudget, setAgentBudget, agentCallsMade
+  isAutonomousMode, setIsAutonomousMode, agentBudget, setAgentBudget, agentCallsMade,
+  gpuFeatures
 }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -42,6 +45,30 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
   const isGoogleModel = model.provider === ModelProvider.GoogleAI;
   const isHuggingFaceModel = model.provider === ModelProvider.HuggingFace;
   const needsApiKey = isGoogleModel && !process.env.API_KEY;
+
+  const availableQuantizations = useMemo(() => {
+    // Only filter for HF models on WebGPU
+    if (model.provider !== ModelProvider.HuggingFace || device !== 'webgpu') {
+      return HUGGING_FACE_QUANTIZATIONS;
+    }
+    
+    // Conservatively disable f16 if features are unknown or unsupported.
+    const hasF16Support = gpuFeatures?.has('shader-f16') ?? false;
+    
+    return HUGGING_FACE_QUANTIZATIONS.filter(q => {
+      const needsF16 = q.value === 'fp16' || q.value === 'q4f16';
+      return !needsF16 || hasF16Support;
+    });
+  }, [model.provider, device, gpuFeatures]);
+
+  useEffect(() => {
+    // If the current quantization is no longer in the available list, reset it.
+    // This handles switching to webgpu on a device without f16 support.
+    if (!availableQuantizations.some(q => q.value === quantization)) {
+      setQuantization(DEFAULT_HUGGING_FACE_QUANTIZATION);
+    }
+  }, [availableQuantizations, quantization, setQuantization]);
+
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -226,7 +253,7 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                       aria-label="Select Model Quantization"
                       className="appearance-none w-full bg-slate-700 text-slate-200 font-semibold pl-3 pr-8 py-2 rounded-lg hover:bg-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all duration-300"
                     >
-                      {HUGGING_FACE_QUANTIZATIONS.map(q => (
+                      {availableQuantizations.map(q => (
                         <option key={q.value} value={q.value} className="font-sans">{q.label}</option>
                       ))}
                     </select>
