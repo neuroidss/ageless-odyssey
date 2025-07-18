@@ -101,7 +101,6 @@ const App: React.FC = () => {
   const [agentCallsMade, setAgentCallsMade] = useState<number>(0);
   const [budgetResetTimestamp, setBudgetResetTimestamp] = useState<number>(0);
   const autonomousTimerRef = useRef<number | null>(null);
-  const autonomousStateRef = useRef({ agentCallsMade, agentBudget, budgetResetTimestamp });
 
 
   const [debugLog, setDebugLog] = useState<string[]>([]);
@@ -114,11 +113,6 @@ const App: React.FC = () => {
   }, []);
 
   // --- State Persistence ---
-  
-  // Keep the ref for the autonomous agent updated on every render
-  useEffect(() => {
-    autonomousStateRef.current = { agentCallsMade, agentBudget, budgetResetTimestamp };
-  });
 
   // Load state from localStorage on initial mount
   useEffect(() => {
@@ -282,37 +276,58 @@ const App: React.FC = () => {
     });
   }, []);
   
-  // Effect for Autonomous Agent
+  // Effect for Autonomous Agent - Refactored for correctness and responsiveness
   useEffect(() => {
     if (autonomousTimerRef.current) {
         clearTimeout(autonomousTimerRef.current);
-        autonomousTimerRef.current = null;
     }
 
     if (!isAutonomousMode) {
-        addLog("[Autonomous] Mode is disabled. Stopping all scheduled tasks.");
+        addLog("[Autonomous] Mode is disabled.");
+        setIsAutonomousLoading(false);
         return;
     }
 
-    // These functions are defined inside the effect so they close over the correct props and state
-    // for this particular render, which is essential for a stable dependency array.
-    
-    const runAutonomousAgent = async () => {
-        // Use the ref to get the most up-to-date state values to check budget
-        if (autonomousStateRef.current.agentCallsMade >= autonomousStateRef.current.agentBudget) {
-            setIsAutonomousLoading(false);
-            scheduleNextAutonomousCall(); // Reschedule for the next cycle
-            return;
-        }
-        
+    // Check if the budget cycle needs to be reset
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    if (now - budgetResetTimestamp > oneDay) {
+        addLog("[Autonomous] New 24-hour cycle started. Resetting budget.");
+        setBudgetResetTimestamp(now);
+        setAgentCallsMade(0);
+        return; // The effect will re-run with the reset values.
+    }
+
+    // Check if budget is exhausted
+    if (agentCallsMade >= agentBudget) {
+        addLog(`[Autonomous] Budget of ${agentBudget} exhausted for this cycle. Checking again later.`);
+        const timeUntilNextCycle = (budgetResetTimestamp + oneDay) - now;
+        autonomousTimerRef.current = window.setTimeout(() => {
+            // This will trigger the effect to re-run and reset the budget.
+            addLog("[Autonomous] Timer fired to re-check budget status.");
+            setAgentCallsMade(0);
+            setBudgetResetTimestamp(Date.now());
+        }, timeUntilNextCycle > 0 ? timeUntilNextCycle + 1000 : 1000);
+        return;
+    }
+
+    const timeElapsedToday = now - budgetResetTimestamp;
+    const timeRemainingToday = oneDay - timeElapsedToday;
+    const callsRemaining = agentBudget - agentCallsMade;
+
+    // Make the first call of a cycle happen quickly
+    const isFirstCallOfCycle = agentCallsMade === 0;
+    const calculatedInterval = callsRemaining > 0 ? timeRemainingToday / callsRemaining : timeRemainingToday;
+    const finalInterval = isFirstCallOfCycle ? Math.min(calculatedInterval, 10 * 1000) : calculatedInterval;
+
+    addLog(`[Autonomous] Calls remaining: ${callsRemaining}/${agentBudget}. Time left: ${(timeRemainingToday / 3600000).toFixed(1)}h. Next call in ${(finalInterval / 60000).toFixed(1)} mins.`);
+
+    autonomousTimerRef.current = window.setTimeout(async () => {
         addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
         setIsAutonomousLoading(true);
-
         try {
             const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device);
             addLog(`[Autonomous] Agent finished. Found ${response.items.length} new items.`);
-            // Use functional update to ensure we're incrementing the latest value
-            setAgentCallsMade(prev => prev + 1);
             
             if (response.items.length > 0) {
                 setHasSearched(prev => prev ? prev : true);
@@ -333,66 +348,19 @@ const App: React.FC = () => {
             const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
             addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
         } finally {
+            // This state update will trigger this effect to re-run and schedule the next call correctly.
+            // It's in `finally` to ensure we don't get stuck in a loop on error.
+            setAgentCallsMade(prev => prev + 1);
             setIsAutonomousLoading(false);
-            // CRITICAL: Schedule the next call only after the current one has finished.
-            scheduleNextAutonomousCall();
         }
-    };
-
-    const scheduleNextAutonomousCall = () => {
-        const now = Date.now();
-        const oneDay = 24 * 60 * 60 * 1000;
-        
-        // Use the ref to get the latest state without causing re-renders of the effect
-        let { agentCallsMade: currentCallsMade, agentBudget: currentBudget, budgetResetTimestamp: currentTimestamp } = autonomousStateRef.current;
-
-        // Check if the daily budget needs to be reset
-        if (now - currentTimestamp > oneDay) {
-            addLog("[Autonomous] New 24-hour cycle started. Resetting budget.");
-            currentTimestamp = now;
-            currentCallsMade = 0;
-            // Persist the reset state
-            setBudgetResetTimestamp(now);
-            setAgentCallsMade(0);
-        }
-        
-        const callsRemaining = currentBudget - currentCallsMade;
-
-        if (callsRemaining <= 0) {
-            addLog(`[Autonomous] Budget of ${currentBudget} exhausted. Checking again at start of next cycle.`);
-            const timeUntilNextCycle = (currentTimestamp + oneDay) - now;
-            autonomousTimerRef.current = window.setTimeout(scheduleNextAutonomousCall, timeUntilNextCycle > 0 ? timeUntilNextCycle + 1000 : 1000);
-            return;
-        }
-
-        const timeElapsedToday = now - currentTimestamp;
-        const timeRemainingToday = oneDay - timeElapsedToday;
-
-        if (timeRemainingToday <= 0) {
-            addLog("[Autonomous] End of 24-hour cycle. Re-evaluating schedule.");
-            autonomousTimerRef.current = window.setTimeout(scheduleNextAutonomousCall, 1000);
-            return;
-        }
-        
-        // Distribute remaining calls evenly over the rest of the day
-        const interval = timeRemainingToday / callsRemaining;
-        addLog(`[Autonomous] Calls remaining: ${callsRemaining}/${currentBudget}. Time left in cycle: ${(timeRemainingToday / 3600000).toFixed(1)}h. Next call in ${(interval / 60000).toFixed(1)} mins.`);
-        autonomousTimerRef.current = window.setTimeout(runAutonomousAgent, interval);
-    };
-
-    addLog("[Autonomous] Mode activated. Scheduling autonomous agent.");
-    scheduleNextAutonomousCall(); // Start the cycle
+    }, finalInterval);
 
     return () => {
-        // Cleanup function to clear the timer when the component unmounts or dependencies change
         if (autonomousTimerRef.current) {
             clearTimeout(autonomousTimerRef.current);
-            addLog("[Autonomous] Cleanup: Timer cleared due to state change or unmount.");
         }
     };
-    // This dependency array is now stable. It will only re-run the effect if the user
-    // changes the mode, budget, or model settings, which is the desired behavior.
-  }, [isAutonomousMode, agentBudget, model, quantization, apiKey, device, addLog, updateAscensionState]);
+  }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, addLog, updateAscensionState]);
 
 
   const handleDispatchAgent = useCallback(async (agentType: AgentType) => {

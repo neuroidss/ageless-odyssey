@@ -63,11 +63,15 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
 
     switch (agentType) {
         case AgentType.TrendSpotter: {
-            const userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3-5 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
+            let userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3-5 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
 
 Also, construct a knowledge graph. This graph should contain a central 'Topic' node representing "${query}". For each trend you identify, create a 'Process' node (e.g. for "Targeting Glial-Specific Autophagy"). The 'id' for trend nodes should be a slug-cased version of the trend name. Connect each trend node to the central topic node with a "is a trend in" edge.
 
-Your response MUST be a JSON object with two top-level keys: "trends" and "knowledgeGraph".
+Your response MUST be a JSON object with two top-level keys: "trends" and "knowledgeGraph".`;
+
+            if (isLocalModel) {
+                const slugQuery = query.toLowerCase().replace(/\s+/g, '_');
+                userPrompt += `
 
 Example JSON structure:
 {
@@ -83,14 +87,15 @@ Example JSON structure:
   ],
   "knowledgeGraph": {
     "nodes": [
-      { "id": "topic_${query.toLowerCase().replace(/\s+/g, '_')}", "label": "${query}", "type": "Topic" },
+      { "id": "topic_${slugQuery}", "label": "${query}", "type": "Topic" },
       { "id": "targeting-glial-specific-autophagy", "label": "Targeting Glial-Specific Autophagy", "type": "Process" }
     ],
     "edges": [
-      { "source": "targeting-glial-specific-autophagy", "target": "topic_${query.toLowerCase().replace(/\s+/g, '_')}", "label": "is a trend in" }
+      { "source": "targeting-glial-specific-autophagy", "target": "topic_${slugQuery}", "label": "is a trend in" }
     ]
   }
 }`;
+            }
 
             return {
                 systemInstruction: `You are a 'Singularity Detector' AI, a world-class research analyst specializing in identifying exponentially growing and radically transformative trends in longevity science. Your task is to analyze scientific literature, patents, and pre-prints to find the 'next big thing'. ${jsonOutputInstruction}`,
