@@ -1,6 +1,7 @@
 # The Ageless Odyssey
 
 **Live Demo:** [https://neuroidss.github.io/ageless-odyssey/](https://neuroidss.github.io/ageless-odyssey/)
+![Semantic Knowledge Web. This interactive graph visualizes the conceptual relationships in your workspace, representing an embedding of the topic. Drag nodes to explore the network.](https://github.com/user-attachments/assets/f49c4542-5d89-45d8-9a5c-ff31c11cc2b8)
 
 ## Description
 
