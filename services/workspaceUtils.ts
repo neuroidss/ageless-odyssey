@@ -29,10 +29,10 @@ export const createNextWorkspaceState = (
         const existingEdges = baseWorkspace.knowledgeGraph?.edges || [];
         const existingNodeIds = new Set(existingNodes.map(n => n.id));
         
-        const newNodes = agentResponse.knowledgeGraph.nodes.filter(n => n && !existingNodeIds.has(n.id));
+        const newNodes = (agentResponse.knowledgeGraph.nodes || []).filter(n => n && !existingNodeIds.has(n.id));
         
         const existingEdgeIds = new Set(existingEdges.map(e => `${e.source}-${e.target}-${e.label}`));
-        const newEdges = agentResponse.knowledgeGraph.edges.filter(e => e && !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
+        const newEdges = (agentResponse.knowledgeGraph.edges || []).filter(e => e && !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
         
         newGraph = {
             nodes: [...existingNodes, ...newNodes],
