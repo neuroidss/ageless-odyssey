@@ -186,7 +186,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['senolytics', 'dasatinib', 'quercetin'] },
         reward: { xp: 150, memic: 200, genetic: 50, benchmark: 5 },
         citations: [
-            { title: "The Clinical Potential of Senolytics (Kirkland & Tchkonia, 2020)", url: "https://doi.org/10.1172/jci.insight.140316" }
+            { title: "The Clinical Potential of Senolytic Drugs (Kirkland et al., 2017)", url: "https://doi.org/10.1111/jgs.14969" }
         ],
         unlocksAchievement: 'BIO_STRATEGIST',
         unlocksIntervention: 'senolytics',
@@ -200,7 +200,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['NAD+', 'precursors', 'NMN', 'NR'] },
         reward: { xp: 150, memic: 200, genetic: 50 },
         citations: [
-            { title: "The NAD+ precursor nicotinamide riboside enhances oxidative metabolism (Cantó et al., 2012)", url: "https://doi.org/10.1016/j.cmet.2012.05.007" }
+            { title: "The NAD+ Precursor Nicotinamide Riboside Enhances Oxidative Metabolism (Cantó et al., 2012)", url: "https://doi.org/10.1016/j.cmet.2012.04.022" }
         ],
         unlocksIntervention: 'nad_precursors',
         realmRequirement: Realm.MortalShell,
