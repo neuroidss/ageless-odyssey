@@ -4,40 +4,7 @@ import { dispatchAgent, synthesizeFindings } from '../services/geminiService';
 import { buildRAGIndex, queryRAGIndex } from '../services/ragService';
 import { useAppSettings } from './useAppSettings'; // Assuming settings hook provides necessary props
 import { getInitialTrajectory } from '../services/trajectoryService';
-
-const createNextWorkspaceState = (
-    currentTopic: string,
-    previousState: WorkspaceState | null,
-    agentResponse: AgentResponse
-): WorkspaceState => {
-    const baseWorkspace = previousState || { topic: currentTopic, items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null, timestamp: 0 };
-    
-    const newItems = (agentResponse.items ?? []).filter((newItem: WorkspaceItem) => !baseWorkspace.items.some(existing => existing.id === newItem.id));
-    const newSources = (agentResponse.sources ?? []).filter(newSrc => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri));
-    
-    let newGraph = baseWorkspace.knowledgeGraph;
-    if (agentResponse.knowledgeGraph) {
-        const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id) || []);
-        const newNodes = agentResponse.knowledgeGraph.nodes.filter(n => !existingNodeIds.has(n.id));
-        
-        const existingEdgeIds = new Set(baseWorkspace.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
-        const newEdges = agentResponse.knowledgeGraph.edges.filter(e => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
-        
-        newGraph = {
-            nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
-            edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
-        };
-    }
-
-    return {
-        topic: currentTopic,
-        items: [...baseWorkspace.items, ...newItems],
-        sources: [...baseWorkspace.sources, ...newSources],
-        knowledgeGraph: newGraph,
-        synthesis: baseWorkspace.synthesis,
-        timestamp: Date.now()
-    };
-};
+import { createNextWorkspaceState } from '../services/workspaceUtils';
 
 export const useWorkspaceManager = (
     settings: ReturnType<typeof useAppSettings>,
