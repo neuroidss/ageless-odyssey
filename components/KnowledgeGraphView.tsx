@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { KnowledgeGraph, KnowledgeGraphNode } from '../types';
 import { GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon } from './icons';
@@ -12,12 +10,13 @@ const NODE_RADIUS = 30;
 const FONT_SIZE = 10;
 
 // Physics Constants - Tuned for better separation and faster settling
-const REPULSION_STRENGTH = 25000;
-const ATTRACTION_STRENGTH = 0.025;
-const IDEAL_LENGTH_DEFAULT = 150;
-const IDEAL_LENGTH_TOPIC = 220; // Longer links for topic nodes
-const DAMPING = 0.92;
-const CENTER_GRAVITY = 0.05;
+const REPULSION_STRENGTH = 12000;
+const ATTRACTION_STRENGTH = 0.02;
+const IDEAL_LENGTH_DEFAULT = 160;
+const IDEAL_LENGTH_TOPIC = 250;
+const DAMPING = 0.88; // Lower is more damping
+const CENTER_GRAVITY = 0.015;
+const SIMULATION_STOP_THRESHOLD = 0.01;
 
 const NodeIcon: React.FC<{ type: KnowledgeGraphNode['type']; className?: string }> = ({ type, className="h-5 w-5" }) => {
     switch(type) {
@@ -55,17 +54,22 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
     const draggedNodeId = useRef<string | null>(null);
     const animationFrameId = useRef<number | undefined>(undefined);
 
+    const simulationLoop = useRef<(() => void) | undefined>(undefined);
+
     useEffect(() => {
         if (!svgRef.current) return;
-        
+
         const width = svgRef.current.parentElement?.clientWidth || 500;
         const height = svgRef.current.parentElement?.clientHeight || 500;
+
+        // Use a ref-like object to hold the latest positions to avoid stale closures in the loop
+        const positionRef = React.createRef<{ [id: string]: { x: number; y: number } }>();
+        positionRef.current = { ...positions };
         
-        // Initialize positions for new nodes
-        const newPositions: { [id: string]: { x: number; y: number } } = {};
+        // Initialize positions for new nodes that aren't already positioned
         graph.nodes.forEach(node => {
-            if (!positions[node.id]) {
-                 newPositions[node.id] = {
+            if (!positionRef.current![node.id]) {
+                positionRef.current![node.id] = {
                     x: width / 2 + (Math.random() - 0.5) * 100,
                     y: height / 2 + (Math.random() - 0.5) * 100,
                 };
@@ -74,11 +78,14 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
                 velocities.current[node.id] = { x: 0, y: 0 };
             }
         });
-        setPositions(prev => ({...prev, ...newPositions}));
+        setPositions(positionRef.current);
 
-        const simulationLoop = () => {
-            const currentPositions = { ...positions, ...newPositions };
+
+        simulationLoop.current = () => {
+            if (!positionRef.current) return;
+            const currentPositions = { ...positionRef.current };
             const forces: { [id: string]: { x: number; y: number } } = {};
+            let totalKineticEnergy = 0;
 
             graph.nodes.forEach(node => {
                 forces[node.id] = { x: 0, y: 0 };
@@ -91,7 +98,6 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
                     const node2 = graph.nodes[j];
                     const pos1 = currentPositions[node1.id];
                     const pos2 = currentPositions[node2.id];
-
                     if (!pos1 || !pos2) continue;
 
                     const dx = pos1.x - pos2.x;
@@ -156,22 +162,33 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
                 vel.x = (vel.x + forces[node.id].x) * DAMPING;
                 vel.y = (vel.y + forces[node.id].y) * DAMPING;
                 
+                totalKineticEnergy += vel.x * vel.x + vel.y * vel.y;
+
                 nextPositions[node.id].x += vel.x;
                 nextPositions[node.id].y += vel.y;
             });
-
+            
+            positionRef.current = nextPositions;
             setPositions(nextPositions);
-            animationFrameId.current = requestAnimationFrame(simulationLoop);
+
+            // Stop simulation if it has settled
+            if (totalKineticEnergy < SIMULATION_STOP_THRESHOLD && !draggedNodeId.current) {
+                animationFrameId.current = undefined;
+            } else {
+                animationFrameId.current = requestAnimationFrame(simulationLoop.current!);
+            }
         };
         
-        animationFrameId.current = requestAnimationFrame(simulationLoop);
+        if (!animationFrameId.current) {
+            animationFrameId.current = requestAnimationFrame(simulationLoop.current!);
+        }
 
         return () => {
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
+                animationFrameId.current = undefined;
             }
         };
-
     }, [graph]);
 
     const handleMouseDown = (e: React.MouseEvent, nodeId: string) => {
@@ -195,9 +212,12 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
     };
 
     const handleMouseUp = () => {
+        if (draggedNodeId.current && !animationFrameId.current) {
+            // Kickstart the simulation again if it was stopped
+            animationFrameId.current = requestAnimationFrame(simulationLoop.current!);
+        }
         draggedNodeId.current = null;
     };
-
 
     return (
         <svg

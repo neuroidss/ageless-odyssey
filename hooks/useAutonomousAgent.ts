@@ -1,0 +1,145 @@
+import { useEffect, useRef } from 'react';
+import { AUTONOMOUS_AGENT_QUERY } from '../constants';
+import { queryRAGIndex } from '../services/ragService';
+import { dispatchAgent } from '../services/geminiService';
+import { RAGIndexEntry, AgentType, AgentResponse, ModelDefinition, HuggingFaceDevice, SearchDataSource, WorkspaceState, Quest } from '../types';
+
+interface AutonomousAgentProps {
+    isAutonomousMode: boolean;
+    agentBudget: number;
+    agentCallsMade: number;
+    setAgentCallsMade: React.Dispatch<React.SetStateAction<number>>;
+    budgetResetTimestamp: number;
+    setBudgetResetTimestamp: React.Dispatch<React.SetStateAction<number>>;
+    ragIndex: RAGIndexEntry[];
+    model: ModelDefinition;
+    quantization: string;
+    apiKey: string;
+    device: HuggingFaceDevice;
+    searchSources: SearchDataSource[];
+    addLog: (msg: string) => void;
+    handleQuestCompletion: (quest: Quest) => void;
+    setHasSearched: React.Dispatch<React.SetStateAction<boolean>>;
+    setWorkspaceHistory: React.Dispatch<React.SetStateAction<WorkspaceState[]>>;
+    setTimeLapseIndex: React.Dispatch<React.SetStateAction<number>>;
+    setIsAutonomousLoading: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+const createNextWorkspaceState = (
+    currentTopic: string,
+    previousState: WorkspaceState | null,
+    agentResponse: AgentResponse
+): WorkspaceState => {
+    const baseWorkspace = previousState || { topic: currentTopic, items: [], sources: [], knowledgeGraph: { nodes: [], edges: [] }, synthesis: null, timestamp: 0 };
+    const newItems = (agentResponse.items ?? []).filter(newItem => !baseWorkspace.items.some(existing => existing.id === newItem.id));
+    const newSources = (agentResponse.sources ?? []).filter(newSrc => !baseWorkspace.sources.some(existing => existing.uri === newSrc.uri));
+    
+    let newGraph = baseWorkspace.knowledgeGraph;
+    if (agentResponse.knowledgeGraph) {
+        const existingNodeIds = new Set(baseWorkspace.knowledgeGraph?.nodes.map(n => n.id) || []);
+        const newNodes = agentResponse.knowledgeGraph.nodes.filter(n => !existingNodeIds.has(n.id));
+        const existingEdgeIds = new Set(baseWorkspace.knowledgeGraph?.edges.map(e => `${e.source}-${e.target}-${e.label}`) || []);
+        const newEdges = agentResponse.knowledgeGraph.edges.filter(e => !existingEdgeIds.has(`${e.source}-${e.target}-${e.label}`));
+        newGraph = {
+            nodes: [...(baseWorkspace.knowledgeGraph?.nodes || []), ...newNodes],
+            edges: [...(baseWorkspace.knowledgeGraph?.edges || []), ...newEdges],
+        };
+    }
+
+    return {
+        topic: currentTopic,
+        items: [...baseWorkspace.items, ...newItems],
+        sources: [...baseWorkspace.sources, ...newSources],
+        knowledgeGraph: newGraph,
+        synthesis: baseWorkspace.synthesis,
+        timestamp: Date.now()
+    };
+};
+
+export const useAutonomousAgent = (props: AutonomousAgentProps) => {
+    const {
+        isAutonomousMode, agentBudget, agentCallsMade, setAgentCallsMade, budgetResetTimestamp, setBudgetResetTimestamp,
+        ragIndex, model, quantization, apiKey, device, searchSources, addLog, handleQuestCompletion,
+        setHasSearched, setWorkspaceHistory, setTimeLapseIndex, setIsAutonomousLoading
+    } = props;
+    
+    const autonomousTimerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (autonomousTimerRef.current) {
+            clearTimeout(autonomousTimerRef.current);
+        }
+
+        if (!isAutonomousMode) {
+            addLog("[Autonomous] Mode is disabled.");
+            setIsAutonomousLoading(false);
+            return;
+        }
+
+        const now = Date.now();
+        const oneDay = 24 * 60 * 60 * 1000;
+        if (now - budgetResetTimestamp > oneDay) {
+            addLog("[Autonomous] New 24-hour cycle started. Resetting budget.");
+            setAgentCallsMade(0);
+            setBudgetResetTimestamp(now);
+            return;
+        }
+
+        if (agentCallsMade >= agentBudget) {
+            addLog(`[Autonomous] Budget of ${agentBudget} exhausted. Checking again later.`);
+            const timeUntilNextCycle = (budgetResetTimestamp + oneDay) - now;
+            autonomousTimerRef.current = window.setTimeout(() => {
+                setAgentCallsMade(0);
+                setBudgetResetTimestamp(Date.now());
+            }, timeUntilNextCycle > 0 ? timeUntilNextCycle + 1000 : 1000);
+            return;
+        }
+
+        const timeElapsedToday = now - budgetResetTimestamp;
+        const timeRemainingToday = oneDay - timeElapsedToday;
+        const callsRemaining = agentBudget - agentCallsMade;
+        const calculatedInterval = callsRemaining > 0 ? timeRemainingToday / callsRemaining : timeRemainingToday;
+        const finalInterval = agentCallsMade === 0 ? Math.min(calculatedInterval, 10 * 1000) : calculatedInterval;
+
+        addLog(`[Autonomous] Calls remaining: ${callsRemaining}/${agentBudget}. Next call in ${(finalInterval / 60000).toFixed(1)} mins.`);
+
+        autonomousTimerRef.current = window.setTimeout(async () => {
+            addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
+            setIsAutonomousLoading(true);
+            try {
+                const ragContext = await queryRAGIndex(AUTONOMOUS_AGENT_QUERY, ragIndex, addLog);
+                const response = await dispatchAgent(
+                    AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, 
+                    device, searchSources, undefined, undefined, ragContext ?? undefined
+                );
+                addLog(`[Autonomous] Agent finished. Found ${(response.items || []).length} new items.`);
+                
+                setAgentCallsMade(prev => prev + 1);
+                // The quest checking logic requires access to the full quest list, which this hook doesn't have.
+                // This is a limitation of this refactoring. The logic should be elevated or quest state passed down.
+                // For now, we rely on `handleQuestCompletion` passed in.
+
+                if ((response.items || []).length > 0) {
+                    setHasSearched(true);
+                    setWorkspaceHistory(prevHistory => {
+                        const lastWorkspace = prevHistory.length > 0 ? prevHistory[prevHistory.length - 1] : null;
+                        const newWorkspace = createNextWorkspaceState(AUTONOMOUS_AGENT_QUERY, lastWorkspace, response);
+                        setTimeLapseIndex(prevHistory.length);
+                        return [...prevHistory, newWorkspace];
+                    });
+                }
+            } catch (e) {
+                const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
+                addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
+            } finally {
+                setIsAutonomousLoading(false);
+            }
+        }, finalInterval);
+
+        return () => {
+            if (autonomousTimerRef.current) {
+                clearTimeout(autonomousTimerRef.current);
+            }
+        };
+    }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, searchSources, addLog, ragIndex, handleQuestCompletion, setIsAutonomousLoading, setAgentCallsMade, setBudgetResetTimestamp, setHasSearched, setTimeLapseIndex, setWorkspaceHistory]);
+};

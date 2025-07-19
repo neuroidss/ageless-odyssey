@@ -135,131 +135,61 @@ const searchPubMed = async (query: string, addLog: (message: string) => void): P
     return results;
 };
 
-const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
-    if (vecA.length !== vecB.length || vecA.length === 0) {
-        return 0;
-    }
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-    for (let i = 0; i < vecA.length; i++) {
-        dotProduct += vecA[i] * vecB[i];
-        normA += vecA[i] * vecA[i];
-        normB += vecB[i] * vecB[i];
-    }
-    if (normA === 0 || normB === 0) {
-        return 0;
-    }
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-};
-
-const searchBioRxivRAG = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
-    addLog('[Search.BioRxivRAG] Starting RAG-based search over latest preprints...');
-    // This feed provides the latest articles across all subjects, not a direct search.
-    // The RAG approach will rank these articles for relevance against the query.
-    const url = 'https://connect.biorxiv.org/biorxiv_xml.php?subject=all';
-    const articles: { title: string, link: string, abstract: string, authors: string }[] = [];
-    try {
-        addLog(`[Search.BioRxivRAG] Fetching feed from ${url}`);
-        const response = await fetchWithProxy(url, addLog);
-        const xmlText = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xmlText, 'application/xml');
-        const items = doc.querySelectorAll('item');
-        
-        items.forEach(item => {
-            const titleEl = item.querySelector('title');
-            const linkEl = item.querySelector('link');
-            const descriptionEl = item.querySelector('description');
-            const creatorEls = item.querySelectorAll('dc\\:creator');
-            if (titleEl && linkEl) {
-                articles.push({
-                    title: titleEl.textContent || '',
-                    link: linkEl.textContent || '',
-                    abstract: descriptionEl ? stripTags(descriptionEl.textContent || '') : '',
-                    authors: Array.from(creatorEls).map(el => el.textContent).join(', '),
-                });
-            }
-        });
-        addLog(`[Search.BioRxivRAG] Fetched and parsed ${articles.length} articles from feed.`);
-
-        if (articles.length === 0) return [];
-        
-        addLog(`[Search.BioRxivRAG] Generating embeddings for query and ${articles.length} articles...`);
-        const textsToEmbed = [
-            query, 
-            ...articles.map(a => `Title: ${a.title}\nAbstract: ${a.abstract}`)
-        ];
-        
-        const embeddings = await generateEmbeddings('Xenova/all-MiniLM-L6-v2', textsToEmbed, addLog);
-        const queryEmbedding = embeddings[0];
-        const articleEmbeddings = embeddings.slice(1);
-        addLog(`[Search.BioRxivRAG] Embeddings generated successfully.`);
-        
-        const articlesWithSimilarity = articles.map((article, index) => ({
-            ...article,
-            similarity: cosineSimilarity(queryEmbedding, articleEmbeddings[index])
-        }));
-        
-        articlesWithSimilarity.sort((a, b) => b.similarity - a.similarity);
-        
-        addLog(`[Search.BioRxivRAG] Top 5 results by similarity: ${articlesWithSimilarity.slice(0, 5).map(a => `${a.title.slice(0,30)}... (${a.similarity.toFixed(3)})`).join(', ')}`);
-        
-        return articlesWithSimilarity.slice(0, 5).map(a => ({
-            link: a.link,
-            title: a.title,
-            snippet: `Authors: ${a.authors}. Abstract: ${a.abstract.substring(0, 250)}... [Similarity: ${a.similarity.toFixed(3)}]`,
-            source: SearchDataSource.BioRxivRAG
-        }));
-
-    } catch (error) {
-        addLog(`[Search.BioRxivRAG] Error during RAG search: ${error}`);
-        return [];
-    }
-};
-
-/**
- * Searches bioRxiv via its full-text search interface.
- */
-const searchBioRxivText = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
-    const url = `https://www.biorxiv.org/search/${encodeURIComponent(query)}`;
+const searchBioRxiv = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+    addLog(`[Search.BioRxiv] Starting search via PubMed Central API...`);
     const results: SearchResult[] = [];
     try {
-        const response = await fetchWithProxy(url, addLog);
-        const htmlContent = await response.text();
+        // Process the query to be more flexible for PubMed's search engine.
+        // Replace spaces with OR and remove common stop words to broaden the search.
+        const stopWords = new Set(['and', 'for', 'in', 'of', 'the', 'a', 'an']);
+        const processedQuery = query
+            .split(/\s+/)
+            .filter(term => !stopWords.has(term.toLowerCase()))
+            .join(' OR ');
 
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlContent, 'text/html');
-        const resultElements = doc.querySelectorAll('ul.highwire-search-results-list li.search-result');
+        const enhancedQuery = `(${processedQuery}) AND biorxiv[journal]`;
+        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pmc&term=${encodeURIComponent(enhancedQuery)}&retmode=json&sort=relevance&retmax=5`;
+        
+        addLog(`[Fetch] Querying PMC for bioRxiv preprints with processed query: ${enhancedQuery}`);
+        const searchResponse = await fetch(searchUrl);
+        if (!searchResponse.ok) throw new Error(`PMC search for bioRxiv failed with status ${searchResponse.status}`);
+        
+        const searchData = await searchResponse.json();
+        const ids: string[] = searchData.esearchresult.idlist;
 
-        resultElements.forEach(el => {
-            const titleLink = el.querySelector<HTMLAnchorElement>('a.highwire-cite-linked-title');
-            const authorsEl = el.querySelector('.highwire-cite-authors');
-            const metadataEl = el.querySelector('.highwire-cite-metadata');
+        if (ids && ids.length > 0) {
+            const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pmc&id=${ids.join(',')}&retmode=json`;
+            const summaryResponse = await fetch(summaryUrl);
+            if (!summaryResponse.ok) throw new Error(`PMC summary failed with status ${summaryResponse.status}`);
+            
+            const summaryData = await summaryResponse.json();
+            
+            ids.forEach(id => {
+                const article = summaryData.result[id];
+                if (article) {
+                    const pmcId = article.articleids.find((aid: { idtype: string, value: string }) => aid.idtype === 'pmc')?.value;
+                    const link = pmcId 
+                        ? `https://www.ncbi.nlm.nih.gov/pmc/articles/${pmcId}/`
+                        : `https://pubmed.ncbi.nlm.nih.gov/${id}/`; // Fallback to PubMed link for uniqueness
 
-            if (titleLink) {
-                const href = titleLink.getAttribute('href');
-                if (href) {
-                    const link = new URL(href, 'https://www.biorxiv.org').toString();
-                    const title = titleLink.textContent?.trim() ?? 'No title';
-                    const authors = authorsEl?.textContent?.trim().replace(/\s+/g, ' ') ?? '';
-                    const metadata = metadataEl?.textContent?.trim().replace(/\s+/g, ' ') ?? '';
-                    
                     results.push({
-                        link,
-                        title,
-                        snippet: `Authors: ${authors}. ${metadata}`,
-                        source: SearchDataSource.BioRxivText
+                        link: link,
+                        title: article.title,
+                        snippet: `Authors: ${article.authors.map((a: {name: string}) => a.name).join(', ')}. PubDate: ${article.pubdate}.`,
+                        source: SearchDataSource.BioRxiv
                     });
                 }
-            }
-        });
+            });
+            addLog(`[Fetch] Success with PMC API for bioRxiv search. Found ${results.length} results.`);
+        } else {
+            addLog(`[Fetch] No bioRxiv preprints found in PMC for the query.`);
+        }
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addLog(`[Search.BioRxivText] Error searching bioRxiv: ${message}`);
+        addLog(`[Search.BioRxiv] Error searching via PMC: ${error}`);
     }
-    return results.slice(0, 5); // Limit to top 5
+    return results;
 };
+
 
 /**
  * Searches Google Patents. Requires CORS proxy.
@@ -363,8 +293,7 @@ export const performFederatedSearch = async (
     const searchPromises = sources.map(source => {
         switch(source) {
             case SearchDataSource.PubMed: return searchPubMed(query, addLog);
-            case SearchDataSource.BioRxivRAG: return searchBioRxivRAG(query, addLog);
-            case SearchDataSource.BioRxivText: return searchBioRxivText(query, addLog);
+            case SearchDataSource.BioRxiv: return searchBioRxiv(query, addLog);
             case SearchDataSource.GooglePatents: return searchGooglePatents(query, addLog);
             case SearchDataSource.WebSearch: return searchWeb(query, addLog);
             case SearchDataSource.OpenGenes:

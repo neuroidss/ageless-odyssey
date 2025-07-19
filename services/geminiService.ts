@@ -1,13 +1,13 @@
-
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { 
-    type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, 
+    type AgentResponse, type WorkspaceItem, type GroundingSource, 
     type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice, SearchDataSource, 
-    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition, GeneData, Quest, TrendData, RAGContext 
+    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition, TrendData, RAGContext 
 } from '../types';
-import { performFederatedSearch, type SearchResult } from './searchService';
+import { performFederatedSearch } from './searchService';
 import { generateTextWithHuggingFace } from './huggingFaceService';
+import { buildAgentPrompts } from './agentPrompts';
+import { parseAgentResponse, parseJsonFromText } from './agentParser';
 
 const OLLAMA_BASE_URL = 'http://localhost:11434/api/generate';
 
@@ -55,338 +55,6 @@ const callOllamaAPI = async (modelId: string, systemInstruction: string, userPro
         throw new Error("Failed to connect to local Ollama server. Is it running at http://localhost:11434?");
     }
 }
-
-const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: string, provider?: ModelProvider, trendContext?: TrendData, ragContext?: RAGContext): { systemInstruction: string; userPrompt: string; responseSchema?: any } => {
-    const jsonOutputInstruction = "You MUST output your findings as a single, valid JSON object and NOTHING ELSE. Do not include any explanatory text, markdown formatting, or any other characters outside of the main JSON object.";
-    
-    const ragContextPreamble = ragContext
-        ? `First, consider the following historical context from your previous work. This is your memory. Use it to inform your response, avoid redundant work, and build upon past discoveries.\n\n<PAST_WORK_CONTEXT>\n${ragContext.context}\n</PAST_WORK_CONTEXT>\n\n`
-        : '';
-
-    const contextPreamble = searchContext 
-        ? `Based *only* on the following search results from various scientific databases and the web, fulfill the user's request.\n\n<SEARCH_RESULTS>\n${searchContext}\n</SEARCH_RESULTS>\n\n`
-        : '';
-
-    const isLocalModel = provider === ModelProvider.Ollama || provider === ModelProvider.HuggingFace;
-
-    switch (agentType) {
-        case AgentType.QuestCrafter: {
-            const trendDetails = trendContext ? `
-- **Name**: ${query}
-- **Summary**: ${trendContext.justification}
-- **Novelty/Velocity/Impact**: ${trendContext.novelty}/${trendContext.velocity}/${trendContext.impact}
-` : `A trend related to "${query}"`;
-
-            let userPrompt = `Based on this emerging scientific trend, design a new research quest.
-The quest should be a challenging but concrete next step for a researcher.
-${trendDetails}
-
-Generate a JSON object with a single key "newQuest" containing:
-- **title**: A compelling, action-oriented name for the quest.
-- **description**: A brief, motivating summary of why this research is important.
-- **objective**: An object with "agent" (the most suitable AgentType for the task, e.g., "Knowledge Navigator" or "Gene Analyst") and "topicKeywords" (an array of 3-4 specific keywords for the agent to search).
-- **reward**: An object with "xp", "memic", and "genetic" points. Balance them based on the quest's difficulty and potential impact. (e.g., xp: 200, memic: 300, genetic: 100).
-- **citations**: An array containing one or two key scientific papers that form the basis for this trend. Include "title" and a valid "url". If you must invent a citation because none was provided, base it on the trend data.
-`;
-            
-             const questSchema = {
-                type: Type.OBJECT, properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    objective: {
-                        type: Type.OBJECT, properties: {
-                            agent: { type: Type.STRING, enum: Object.values(AgentType) },
-                            topicKeywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        }
-                    },
-                    reward: {
-                        type: Type.OBJECT, properties: {
-                            xp: { type: Type.NUMBER },
-                            memic: { type: Type.NUMBER },
-                            genetic: { type: Type.NUMBER }
-                        }
-                    },
-                    citations: {
-                        type: Type.ARRAY, items: {
-                            type: Type.OBJECT, properties: {
-                                title: { type: Type.STRING },
-                                url: { type: Type.STRING }
-                            }
-                        }
-                    }
-                }
-            };
-
-            return {
-                systemInstruction: `${ragContextPreamble}You are the Quest Forger, an AI that transforms cutting-edge scientific trends into actionable research objectives. Your task is to create a well-defined quest in a specific JSON format. ${jsonOutputInstruction}`,
-                userPrompt,
-                responseSchema: { type: Type.OBJECT, properties: { newQuest: questSchema } }
-            };
-        }
-        case AgentType.TrendSpotter: {
-            let userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3-5 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
-
-Also, construct a knowledge graph. This graph should contain a central 'Topic' node representing "${query}". For each trend you identify, create a 'Process' node (e.g. for "Targeting Glial-Specific Autophagy"). The 'id' for trend nodes should be a slug-cased version of the trend name. Connect each trend node to the central topic node with a "is a trend in" edge.
-
-Your response MUST be a JSON object with two top-level keys: "trends" and "knowledgeGraph".`;
-
-            if (isLocalModel) {
-                // Add a clear example for local models to follow, but still request the graph.
-                const querySlug = query.replace(/\s+/g, '-').toLowerCase();
-                userPrompt += `
-
-Example JSON structure:
-{
-  "trends": [
-    {
-      "name": "Targeting Glial-Specific Autophagy",
-      "summary": "A new focus on clearing cellular debris specifically within glial cells of the brain to combat neuroinflammation and cognitive decline.",
-      "justification": "Recent papers show a direct link between impaired glial autophagy and Alzheimer's models. This moves beyond general autophagy to a highly specific and impactful target.",
-      "novelty": 85,
-      "velocity": 70,
-      "impact": 90
-    }
-  ],
-  "knowledgeGraph": {
-    "nodes": [
-      { "id": "topic-${querySlug}", "label": "${query}", "type": "Topic" },
-      { "id": "process-targeting-glial-specific-autophagy", "label": "Targeting Glial-Specific Autophagy", "type": "Process" }
-    ],
-    "edges": [
-      { "source": "process-targeting-glial-specific-autophagy", "target": "topic-${querySlug}", "label": "is a trend in" }
-    ]
-  }
-}`;
-            }
-
-            return {
-                systemInstruction: `${ragContextPreamble}You are a 'Singularity Detector' AI, a world-class research analyst specializing in identifying exponentially growing and radically transformative trends in longevity science. Your task is to analyze scientific literature, patents, and pre-prints to find the 'next big thing'. ${jsonOutputInstruction}`,
-                userPrompt: userPrompt,
-                responseSchema: {
-                    type: Type.OBJECT, properties: {
-                        trends: {
-                            type: Type.ARRAY, items: {
-                                type: Type.OBJECT, properties: {
-                                    name: { type: Type.STRING },
-                                    summary: { type: Type.STRING },
-                                    justification: { type: Type.STRING },
-                                    novelty: { type: Type.NUMBER },
-                                    velocity: { type: Type.NUMBER },
-                                    impact: { type: Type.NUMBER },
-                                }
-                            }
-                        },
-                        knowledgeGraph: {
-                            type: Type.OBJECT, properties: {
-                                nodes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, label: { type: Type.STRING }, type: { type: Type.STRING } } } },
-                                edges: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source: { type: Type.STRING }, target: { type: Type.STRING }, label: { type: Type.STRING } } } }
-                            }
-                        }
-                    }
-                }
-            };
-        }
-        case AgentType.GeneAnalyst: {
-            let userPrompt = `${contextPreamble}For the research topic "${query}", analyze the provided search results from the OpenGenes database. Identify the top 5 most relevant genes. For each gene, extract its symbol, full name (from the 'title' field), summary (from the 'snippet' field), organism, lifespan effect, and intervention type directly from the provided 'CONTENT' of each context block. The 'function' should be 'Longevity Activator' if the snippet contains 'pro-longevity', 'Longevity Inhibitor' if it contains 'anti-longevity', and 'Context-Dependent' otherwise. Combine the 'Effect' and lifespan change percentage into the 'lifespanEffect' field.`;
-
-            if (isLocalModel) {
-                 userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "genes": [\n    {\n      "symbol": "FOXO3",\n      "name": "Forkhead box protein O3",\n      "summary": "A key transcription factor that regulates the expression of genes involved in stress resistance, metabolism, and cell apoptosis, strongly linked to exceptional human longevity.",\n      "function": "Longevity Activator",\n      "lifespanEffect": "pro-longevity (+10% to +30%)",\n      "organism": "Homo sapiens",\n      "intervention": "Genetic variant (SNP)"\n    }\n  ]\n}`;
-            }
-            return {
-                systemInstruction: `${ragContextPreamble}You are a precise data extraction AI. Your task is to analyze structured text from the OpenGenes database and convert it into a specific JSON format. You must extract information *only* from the provided context. ${jsonOutputInstruction}`,
-                userPrompt: userPrompt,
-                responseSchema: {
-                    type: Type.OBJECT, properties: { genes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { 
-                        symbol: { type: Type.STRING }, 
-                        name: { type: Type.STRING }, 
-                        summary: { type: Type.STRING },
-                        function: { type: Type.STRING },
-                        lifespanEffect: { type: Type.STRING },
-                        organism: { type: Type.STRING },
-                        intervention: { type: Type.STRING },
-                    } } } }
-                }
-            };
-        }
-        case AgentType.CompoundAnalyst: {
-             let userPrompt = `${contextPreamble}For the research topic "${query}", analyze the provided patent data to find the top 5 chemical compounds or molecules. For each compound, extract its "name", its primary biological "targetProtein", its "bindingAffinity" (e.g., "IC50 = 10 nM", "Ki = 50 uM", or "activity at 1 uM"), and the "source" patent number (e.g., US11331305B2) which can be found in the URL.`;
-             if (isLocalModel) {
-                userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "compounds": [\n    {\n      "name": "N-Octanoyl Carnosine",\n      "targetProtein": "Extracellular matrix components",\n      "bindingAffinity": "Not specified, stimulates formation",\n      "source": "US11331305B2"\n    }\n  ]\n}`;
-            }
-            return {
-                systemInstruction: `${ragContextPreamble}You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract potential therapeutic compounds, their targets, and binding affinities from patent abstracts. ${jsonOutputInstruction}`,
-                userPrompt: userPrompt,
-                responseSchema: {
-                     type: Type.OBJECT, properties: { compounds: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { 
-                        name: { type: Type.STRING }, 
-                        targetProtein: { type: Type.STRING }, 
-                        bindingAffinity: { type: Type.STRING }, 
-                        source: { type: Type.STRING } 
-                    } } } }
-                }
-            };
-        }
-        case AgentType.KnowledgeNavigator:
-        default: {
-            let userPrompt = `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing two keys: "articles" and "knowledgeGraph". 
-- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present). If no relevant articles are found, this MUST be an empty array.
-- "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}). Create a rich, interconnected graph. Create a central node of type 'Topic' for the main query "${query}". Then, add nodes for key Genes, Compounds, and Processes found in the text. Connect these nodes to the central Topic node and to each other with descriptive labels (e.g., 'regulates', 'inhibits', 'implicated_in').`;
-            
-            if (isLocalModel) {
-                 // Add a clear example for local models to follow, but still request the graph.
-                const querySlug = query.replace(/\s+/g, '-').toLowerCase();
-                const jsonStructureExample = `
-
-Your response MUST follow this exact JSON structure:
-{
-  "articles": [
-    {
-      "title": "Title of Article 1",
-      "summary": "A concise summary of the article's key findings from the provided text.",
-      "authors": "Author A, Author B, et al."
-    }
-  ],
-  "knowledgeGraph": {
-    "nodes": [
-      { "id": "topic-${querySlug}", "label": "${query}", "type": "Topic" },
-      { "id": "gene-sirt1", "label": "SIRT1", "type": "Gene" }
-    ],
-    "edges": [
-      { "source": "gene-sirt1", "target": "topic-${querySlug}", "label": "related to" }
-    ]
-  }
-}`;
-                userPrompt += jsonStructureExample;
-            }
-
-            return {
-                systemInstruction: `${ragContextPreamble}You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a rich, interconnected knowledge graph from the provided text. ${jsonOutputInstruction}`,
-                userPrompt,
-                responseSchema: {
-                    type: Type.OBJECT, properties: {
-                        articles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, summary: { type: 'STRING' }, authors: { type: 'STRING' } } } },
-                        knowledgeGraph: {
-                            type: Type.OBJECT, properties: {
-                                nodes: { type: Type.ARRAY, items: { type: 'OBJECT', properties: { id: { type: 'STRING' }, label: { type: 'STRING' }, type: { type: 'STRING' } } } },
-                                edges: { type: Type.ARRAY, items: { type: 'OBJECT', properties: { source: { type: 'STRING' }, target: { type: 'STRING' }, label: { type: 'STRING' } } } }
-                            }
-                        }
-                    }
-                }
-            };
-        }
-    }
-};
-
-const parseJsonFromText = (text: string, addLog: (msg: string) => void): string => {
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-        addLog('[Parser] Extracted JSON from markdown code block.');
-        return jsonMatch[1];
-    }
-    
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-        addLog('[Parser] Extracted JSON by finding curly braces.');
-        return text.substring(firstBrace, lastBrace + 1);
-    }
-    
-    addLog(`[Parser] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
-    return text;
-}
-
-
-const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg: string) => void): AgentResponse => {
-    try {
-        const data = JSON.parse(jsonText);
-        addLog(`[Parser] Successfully parsed JSON for ${agentType}.`);
-        const response: AgentResponse = {};
-
-        switch (agentType) {
-            case AgentType.QuestCrafter:
-                if (data.newQuest) {
-                    response.newQuest = data.newQuest;
-                }
-                break;
-            case AgentType.TrendSpotter:
-                if (data.trends) {
-                    response.items = data.trends.map((t: any) => {
-                        const novelty = Number(t.novelty) || 0;
-                        const velocity = Number(t.velocity) || 0;
-                        const impact = Number(t.impact) || 0;
-                        return {
-                            id: `trend-${t.name.replace(/\s+/g, '-')}`,
-                            type: 'trend',
-                            title: t.name,
-                            summary: t.summary,
-                            details: `Novelty: ${novelty}/100 | Velocity: ${velocity}/100 | Impact: ${impact}/100`,
-                            trendData: {
-                                novelty,
-                                velocity,
-                                impact,
-                                justification: t.justification,
-                            },
-                            questForged: false,
-                        };
-                    });
-                }
-                if (data.knowledgeGraph) {
-                    response.knowledgeGraph = data.knowledgeGraph;
-                }
-                break;
-            case AgentType.GeneAnalyst:
-                if (data.genes) {
-                    response.items = data.genes.map((g: any) => {
-                        const geneData: GeneData = {
-                            function: g.function || 'N/A',
-                            organism: g.organism || 'N/A',
-                            lifespanEffect: g.lifespanEffect || 'N/A',
-                            intervention: g.intervention || 'N/A',
-                        };
-                        return {
-                            id: `gene-${g.symbol}`, 
-                            type: 'gene', 
-                            title: g.symbol, 
-                            summary: g.summary, 
-                            details: g.name, // Use full name for details
-                            geneData: geneData
-                        };
-                    });
-                }
-                break;
-            case AgentType.CompoundAnalyst:
-                if (data.compounds) {
-                    response.items = data.compounds.map((c: any) => ({
-                        id: `compound-${c.name.replace(/\s+/g, '-')}`, 
-                        type: 'compound', 
-                        title: c.name, 
-                        summary: `Target: ${c.targetProtein || 'N/A'} | Affinity: ${c.bindingAffinity || 'N/A'}`, 
-                        details: `Source: ${c.source}`
-                    }));
-                }
-                break;
-            case AgentType.KnowledgeNavigator:
-            default:
-                 if (data.articles) {
-                    response.items = data.articles.map((a: any) => ({
-                        id: `article-${a.title.slice(0, 20).replace(/\s+/g, '-')}`, type: 'article', title: a.title, summary: a.summary, details: `Authors: ${a.authors}`
-                    }));
-                }
-                if (data.knowledgeGraph) {
-                    response.knowledgeGraph = data.knowledgeGraph;
-                }
-                break;
-        }
-        
-        return response;
-
-    } catch (error) {
-        addLog(`[Parser] ERROR: Error parsing response for ${agentType}: ${error}\nRaw text: ${jsonText}`);
-        return { items: [{ id: 'fallback-item', type: 'article', title: 'Raw Response', summary: jsonText, details: 'Could not parse structured data.' }] };
-    }
-};
-
 
 export const dispatchAgent = async (
     query: string, 
@@ -463,15 +131,26 @@ export const dispatchAgent = async (
             const ai = new GoogleGenAI({ apiKey: key });
             
             addLog(`[GoogleAI] Calling model '${model.id}'...`);
+            
+            const useGoogleSearch = needsSearch;
+
+            const modelConfig: any = {
+                systemInstruction: finalSystemInstruction,
+            };
+
+            if (useGoogleSearch) {
+                modelConfig.tools = [{ googleSearch: {} }];
+                addLog(`[GoogleAI] Enabled Google Search tool. JSON response format is disabled as per API requirements.`);
+            } else if (responseSchema) {
+                modelConfig.responseMimeType = 'application/json';
+                modelConfig.responseSchema = responseSchema;
+                addLog(`[GoogleAI] JSON response format enabled with schema.`);
+            }
+            
             const response = await ai.models.generateContent({
                 model: model.id,
                 contents: userPrompt,
-                config: {
-                    systemInstruction: finalSystemInstruction,
-                    tools: needsSearch ? [{ googleSearch: {} }] : undefined,
-                    responseMimeType: responseSchema ? 'application/json' : undefined,
-                    responseSchema: responseSchema,
-                },
+                config: modelConfig,
             });
             
             if (!response || !response.text || typeof response.text !== 'string' || response.text.trim() === '') {
@@ -576,44 +255,13 @@ export const callAscensionOracle = async (
 ): Promise<RealmDefinition> => {
     addLog("[Oracle] Calling the Ascension Oracle to define the next realm...");
 
-    const systemInstruction = `You are the Ascension Oracle, a metaphysical AI that perceives the next stage of human evolution. Your task is to define the next "Realm" for a user on their journey of radical life extension. You must respond with a single, valid JSON object that strictly adheres to the provided schema and nothing else.`;
+    const { systemInstruction, userPrompt, responseSchema } = buildAgentPrompts(
+        '', // query is not used for oracle
+        'AscensionOracle' as any, // A pseudo-type for this call
+        undefined, undefined, undefined, undefined, 
+        { odysseyState, workspace, trajectoryState } // Pass all context here
+    );
 
-    const userContext = `
-    The user has reached the final known frontier. Here is a snapshot of their progress:
-    - Current Realm: ${odysseyState.realm}
-    - Ascension Vectors: Genetic ${odysseyState.vectors.genetic}, Memic ${odysseyState.vectors.memic}, Cognitive ${odysseyState.vectors.cognitive}
-    - Key Research Topic: "${workspace.topic}"
-    - Latest Synthesis: "${workspace.synthesis?.substring(0, 500)}..."
-    - Biological State: ${trajectoryState?.isRadicalInterventionActive ? 'Radical intervention active.' : `Biological age is ~${trajectoryState?.overallScore.projection[0].value.toFixed(0)}.`}
-
-    Based on this data, define the *next logical Realm*. It must be more advanced than '${odysseyState.realm}'.
-    The Realm name should be evocative and unique.
-    The description should be profound.
-    The criteria must be challenging, futuristic, and follow logically from their current progress.
-    The vector thresholds must be significantly higher than their current values.
-    `;
-
-    const realmSchema = {
-        type: Type.OBJECT,
-        properties: {
-            realm: { type: Type.STRING, description: "The name of the new realm." },
-            description: { type: Type.STRING, description: "A profound description of this state of being." },
-            criteria: {
-                type: Type.ARRAY,
-                description: "Three challenging, futuristic criteria to achieve this realm.",
-                items: { type: Type.STRING }
-            },
-            thresholds: {
-                type: Type.OBJECT,
-                properties: {
-                    cognitive: { type: Type.NUMBER, description: "The required cognitive vector score." },
-                    genetic: { type: Type.NUMBER, description: "The required genetic vector score." },
-                    memic: { type: Type.NUMBER, description: "The required memic vector score." }
-                }
-            }
-        },
-        required: ["realm", "description", "criteria", "thresholds"]
-    };
 
     const key = (apiKey || process.env.API_KEY)?.trim();
     if (!key) throw new Error("API Key for Google AI is not provided for the Ascension Oracle.");
@@ -621,11 +269,11 @@ export const callAscensionOracle = async (
     const ai = new GoogleGenAI({ apiKey: key });
     const response = await ai.models.generateContent({
         model: model.id,
-        contents: userContext,
+        contents: userPrompt,
         config: {
             systemInstruction,
             responseMimeType: 'application/json',
-            responseSchema: realmSchema as any // Cast to any to bypass strict internal schema type
+            responseSchema: responseSchema as any // Cast to any to bypass strict internal schema type
         }
     });
 
