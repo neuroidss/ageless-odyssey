@@ -215,6 +215,7 @@ export interface OdysseyState {
     memic: number;    // Represents knowledge contribution, improved by research
     cognitive: number;// Represents consciousness health, tied to longevity score
   };
+  benchmarkScore: number; // Represents the system's clarity and understanding
   longevityScore: number; // The core metric driving the cognitive vector
   achievements: Record<string, Achievement>;
 }
@@ -244,6 +245,7 @@ export interface Quest {
         xp: number;
         memic: number;
         genetic: number;
+        benchmark?: number;
     };
     citations: Citation[];
     unlocksAchievement?: string;

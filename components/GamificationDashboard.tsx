@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { OdysseyState, Realm, RealmDefinition } from '../types';
-import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon, OracleIcon } from './icons';
+import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon, OracleIcon, SystemClarityIcon } from './icons';
 
 const AchievementCard: React.FC<{ achievement: OdysseyState['achievements'][string] }> = ({ achievement }) => {
     return (
@@ -98,10 +98,11 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState, dynamicRealmDefinitions
                         {nextRealmDef ? (
                             <>
                                 <h4 className="text-center font-semibold text-slate-300 mb-3">Progress to: <span className="text-purple-300">{nextRealmDef.realm}</span></h4>
-                                <div className="flex items-start justify-around gap-3">
+                                <div className="flex items-start justify-around gap-x-6 gap-y-4 flex-wrap">
                                     <VectorDisplay icon={<GeneticIcon />} label="Bio Control" value={odysseyState.vectors.genetic} required={nextRealmDef.thresholds.genetic} color="text-teal-400" progress={(odysseyState.vectors.genetic / nextRealmDef.thresholds.genetic) * 100} />
                                     <VectorDisplay icon={<MemicIcon />} label="Knowledge" value={odysseyState.vectors.memic} required={nextRealmDef.thresholds.memic} color="text-blue-400" progress={(odysseyState.vectors.memic / nextRealmDef.thresholds.memic) * 100}/>
                                     <VectorDisplay icon={<CognitiveBandwidthIcon />} label="Cognition" value={odysseyState.vectors.cognitive} required={nextRealmDef.thresholds.cognitive} color="text-yellow-400" progress={(odysseyState.vectors.cognitive / nextRealmDef.thresholds.cognitive) * 100}/>
+                                    <VectorDisplay icon={<SystemClarityIcon />} label="Clarity" value={odysseyState.benchmarkScore} color="text-pink-400" />
                                 </div>
                             </>
                         ) : isOracleLoading ? (

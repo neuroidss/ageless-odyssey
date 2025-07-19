@@ -181,10 +181,10 @@ export const QUESTS: Quest[] = [
     },
     {
         id: 'Q02_SENOLYTICS',
-        title: 'Validate Senolytics',
-        description: "Cellular senescence is a key hallmark of aging. Investigate the primary senolytic compounds to see if they represent a viable intervention strategy.",
+        title: 'Calibrate: Senolytics',
+        description: "Cellular senescence is a key hallmark of aging. Investigate the primary senolytic compounds. This quest will test the system's ability to navigate foundational concepts.",
         objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['senolytics', 'dasatinib', 'quercetin'] },
-        reward: { xp: 150, memic: 200, genetic: 50 },
+        reward: { xp: 150, memic: 200, genetic: 50, benchmark: 5 },
         citations: [
             { title: "The Clinical Potential of Senolytics (Kirkland & Tchkonia, 2020)", url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400228/" }
         ],
@@ -208,10 +208,10 @@ export const QUESTS: Quest[] = [
     },
     {
         id: 'Q04_FOXO3',
-        title: 'The FOXO3 Gene',
-        description: "The FOXO3 gene is strongly correlated with exceptional human longevity. Use the Gene Analyst to extract its properties and understand its function.",
+        title: 'Calibrate: The FOXO3 Gene',
+        description: "The FOXO3 gene is strongly correlated with exceptional human longevity. Use the Gene Analyst to extract its properties. This serves as a calibration test: can the system correctly parse and structure specific genetic data?",
         objective: { agent: AgentType.GeneAnalyst, topicKeywords: ['FOXO3', 'longevity'] },
-        reward: { xp: 200, memic: 250, genetic: 75 },
+        reward: { xp: 200, memic: 250, genetic: 75, benchmark: 10 },
         citations: [
             { title: "FOXO3A genotype is strongly associated with human longevity (Willcox et al., 2008)", url: "https://www.pnas.org/doi/10.1073/pnas.0801030105" }
         ],

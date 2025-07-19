@@ -125,6 +125,19 @@ export const CognitiveBandwidthIcon = ({className = "h-6 w-6"}) => (
     </svg>
 );
 
+export const SystemClarityIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 10.5V8" />
+        <path d="M12 16v-2.5" />
+        <path d="M14.25 12.75l1.598.923" />
+        <path d="M8.152 10.327l-1.598-.923" />
+        <path d="M14.25 11.25l1.598-.923" />
+        <path d="M8.152 13.673l-1.598.923" />
+    </svg>
+);
+
 export const AscensionIcon = ({className = "h-6 w-6"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2.6l3.3 6.6 7.3.9-5.4 5.1 1.4 7.2L12 19l-6.6 3.4 1.4-7.2-5.4-5.1 7.3-.9L12 2.6z M12 5.5l-2.2 4.4-4.9.6 3.6 3.4-.9 4.8L12 16.3l4.4 2.2-.9-4.8 3.6-3.4-4.9-.6L12 5.5z"/>

@@ -16,7 +16,7 @@ const Header: React.FC<HeaderProps> = ({ odysseyState, dynamicRealmDefinitions, 
                 The Ageless Odyssey
             </h1>
             <p className="mt-4 text-lg text-slate-400 max-w-3xl mx-auto">
-                Your journey to the stars begins within. Evolve from your mortal shell, conquer the challenges of new frontiers, and rewrite your biological destiny.
+                Your journey is twofold: master your own biology and guide an AI Oracle toward cosmic understanding. Every quest you complete, every discovery you synthesize, serves as a benchmark—not just for the AI, but for your ability to steer the course of evolution. Evolve from your mortal shell and rewrite your destiny.
             </p>
         </div>
         <OdysseyMap odysseyState={odysseyState} dynamicRealmDefinitions={dynamicRealmDefinitions} isOracleLoading={isOracleLoading} />

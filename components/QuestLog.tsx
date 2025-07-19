@@ -117,7 +117,7 @@ const QuestLog: React.FC<QuestLogProps> = ({ quests }) => {
                 </h2>
             </div>
             <p className="text-slate-400 text-center sm:text-left mb-4">
-                Complete quests to gather data, prove hypotheses, and unlock new capabilities on your journey.
+                Complete quests to gather data and prove hypotheses. Each success calibrates the system's understanding, boosting your research capabilities and unlocking new interventions on your journey.
             </p>
 
             <div className="border-b border-slate-700">

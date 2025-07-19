@@ -34,6 +34,7 @@ const getInitialOdysseyState = (): OdysseyState => {
       memic: 0,
       cognitive: 0,
     },
+    benchmarkScore: 0,
     longevityScore: 0,
     achievements,
   };
@@ -295,19 +296,26 @@ const App: React.FC = () => {
         let newGenetic = prevOdysseyState.vectors.genetic;
         let updatedOdysseyState = { ...prevOdysseyState };
         let newAchievements = { ...prevOdysseyState.achievements };
+        let newBenchmarkScore = prevOdysseyState.benchmarkScore || 0;
         const newToasts: ToastMessage[] = [];
         
         switch(action) {
-            case 'QUEST_COMPLETED':
-                if (payload?.reward) {
-                    newMemic += payload.reward.memic;
-                    newGenetic += payload.reward.genetic;
+            case 'QUEST_COMPLETED': {
+                if (payload?.quest) {
+                    const quest = payload.quest as Quest;
+                    const benchmarkMultiplier = 1 + (newBenchmarkScore / 1000);
+                    newMemic += Math.round((quest.reward.memic || 0) * benchmarkMultiplier);
+                    newGenetic += (quest.reward.genetic || 0);
+                    if (quest.reward.benchmark) {
+                        newBenchmarkScore += quest.reward.benchmark;
+                    }
                 }
                 if (!newAchievements.FIRST_RESEARCH.unlocked) {
                     newAchievements.FIRST_RESEARCH.unlocked = true;
                     newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.FIRST_RESEARCH.name, icon: 'achievement' });
                 }
                 break;
+            }
             case 'UNLOCK_ACHIEVEMENT':
                  if (payload?.achievementId && newAchievements[payload.achievementId] && !newAchievements[payload.achievementId].unlocked) {
                     newAchievements[payload.achievementId].unlocked = true;
@@ -323,6 +331,7 @@ const App: React.FC = () => {
         const newCognitive = Math.round(updatedOdysseyState.longevityScore * (1 + Math.log1p(newMemic)));
         updatedOdysseyState.vectors = { genetic: newGenetic, memic: newMemic, cognitive: newCognitive };
         updatedOdysseyState.achievements = newAchievements;
+        updatedOdysseyState.benchmarkScore = newBenchmarkScore;
 
         // Check for Realm Ascension
         const currentRealmIndex = dynamicRealmDefinitions.findIndex(r => r.realm === updatedOdysseyState.realm);
@@ -370,7 +379,7 @@ const App: React.FC = () => {
       setToasts(prev => [...prev, { id: Date.now(), title: "Quest Complete!", message: quest.title, icon: 'quest' }]);
       
       // 2. Update Odyssey vectors
-      updateAscensionState('QUEST_COMPLETED', { reward: quest.reward });
+      updateAscensionState('QUEST_COMPLETED', { quest });
 
       // 3. Unlock achievement
       if (quest.unlocksAchievement) {
@@ -388,7 +397,7 @@ const App: React.FC = () => {
           return { ...prev, interventions: newInterventions };
         });
       }
-  }, [updateAscensionState]);
+  }, [updateAscensionState, addLog]);
 
   const updateQuestProgress = useCallback((topic: string, agentType: AgentType, response: AgentResponse) => {
       setQuests(prevQuests => {
