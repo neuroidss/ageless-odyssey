@@ -131,10 +131,8 @@ Also, construct a knowledge graph. This graph should contain a central 'Topic' n
 Your response MUST be a JSON object with two top-level keys: "trends" and "knowledgeGraph".`;
 
             if (isLocalModel) {
-                 // Simplify for smaller models
-                userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
-
-Your response MUST be a JSON object with a single top-level key: "trends". Do not include a "knowledgeGraph".`;
+                // Add a clear example for local models to follow, but still request the graph.
+                const querySlug = query.replace(/\s+/g, '-').toLowerCase();
                 userPrompt += `
 
 Example JSON structure:
@@ -148,7 +146,16 @@ Example JSON structure:
       "velocity": 70,
       "impact": 90
     }
-  ]
+  ],
+  "knowledgeGraph": {
+    "nodes": [
+      { "id": "topic-${querySlug}", "label": "${query}", "type": "Topic" },
+      { "id": "process-targeting-glial-specific-autophagy", "label": "Targeting Glial-Specific Autophagy", "type": "Process" }
+    ],
+    "edges": [
+      { "source": "process-targeting-glial-specific-autophagy", "target": "topic-${querySlug}", "label": "is a trend in" }
+    ]
+  }
 }`;
             }
 
@@ -226,10 +233,8 @@ Example JSON structure:
 - "knowledgeGraph" should be an object with "nodes" (array of {id, label, type}) and "edges" (array of {source, target, label}). Create a rich, interconnected graph. Create a central node of type 'Topic' for the main query "${query}". Then, add nodes for key Genes, Compounds, and Processes found in the text. Connect these nodes to the central Topic node and to each other with descriptive labels (e.g., 'regulates', 'inhibits', 'implicated_in').`;
             
             if (isLocalModel) {
-                // Simplify for smaller models
-                userPrompt = `${contextPreamble}Analyze the topic: "${query}". Respond with a JSON object containing one key: "articles".
-- "articles" should be an array of the top 3 most relevant scientific articles based on the search results, where each article object has "title", "summary", and "authors" (string of authors, infer if not present). If no relevant articles are found, this MUST be an empty array.
-Do not include a "knowledgeGraph".`;
+                 // Add a clear example for local models to follow, but still request the graph.
+                const querySlug = query.replace(/\s+/g, '-').toLowerCase();
                 const jsonStructureExample = `
 
 Your response MUST follow this exact JSON structure:
@@ -240,7 +245,16 @@ Your response MUST follow this exact JSON structure:
       "summary": "A concise summary of the article's key findings from the provided text.",
       "authors": "Author A, Author B, et al."
     }
-  ]
+  ],
+  "knowledgeGraph": {
+    "nodes": [
+      { "id": "topic-${querySlug}", "label": "${query}", "type": "Topic" },
+      { "id": "gene-sirt1", "label": "SIRT1", "type": "Gene" }
+    ],
+    "edges": [
+      { "source": "gene-sirt1", "target": "topic-${querySlug}", "label": "related to" }
+    ]
+  }
 }`;
                 userPrompt += jsonStructureExample;
             }

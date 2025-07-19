@@ -1,6 +1,6 @@
 import { SearchDataSource } from '../types';
 import { generateEmbeddings } from './huggingFaceService';
-import { searchOpenGenesAPI, type OpenGeneRecord } from './openGenesService';
+import { searchOpenGenesAPI, type GeneSearchedRecord } from './openGenesService';
 
 export interface SearchResult {
     title: string;
@@ -230,7 +230,7 @@ const searchBioRxivText = async (query: string, addLog: (message: string) => voi
 
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlContent, 'text/html');
-        const resultElements = doc.querySelectorAll('ul.highwire-search-results-list > li.search-result');
+        const resultElements = doc.querySelectorAll('ul.highwire-search-results-list li.search-result');
 
         resultElements.forEach(el => {
             const titleLink = el.querySelector<HTMLAnchorElement>('a.highwire-cite-linked-title');
@@ -308,20 +308,37 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
 };
 
 
-const mapOpenGeneRecordToSearchResult = (record: OpenGeneRecord): SearchResult => {
-    const lifespanChange = (record.lifespan_change_min_percent === record.lifespan_change_max_percent)
-        ? `${record.lifespan_change_max_percent}%`
-        : `${record.lifespan_change_min_percent}% to ${record.lifespan_change_max_percent}%`;
+const mapGeneSearchedToSearchResult = (record: GeneSearchedRecord): SearchResult => {
+    const firstLifespanResearch = record.researches?.increaseLifespan?.[0];
+    let lifespanChange = 'N/A';
+    let lifespanEffect = 'unclear';
+
+    if (firstLifespanResearch) {
+        lifespanEffect = firstLifespanResearch.interventionResultForLifespan || 'unclear';
+        const min = firstLifespanResearch.lifespanMinChangePercent;
+        const max = firstLifespanResearch.lifespanMaxChangePercent;
+        const mean = firstLifespanResearch.lifespanMeanChangePercent;
+        
+        if (min !== undefined && max !== undefined) {
+             lifespanChange = (min === max) ? `${max}%` : `${min}% to ${max}%`;
+        } else if (max !== undefined) {
+            lifespanChange = `${max}%`;
+        } else if (mean !== undefined) {
+            lifespanChange = `~${mean}%`;
+        }
+    }
     
-    // Safely access nested properties from the API response
-    const hallmark = record.hallmarks_of_aging?.[0]?.name || 'N/A';
-    const intervention = record.interventions?.[0]?.intervention_type?.name || 'N/A';
-    const organism = record.organism?.name || 'N/A';
+    const hallmark = record.agingMechanisms?.[0]?.name || 'N/A';
+    const intervention = firstLifespanResearch?.interventions?.experiment?.[0]?.interventionMethod || 'N/A';
+    const organism = firstLifespanResearch?.modelOrganism || 'N/A';
+
+    // Construct a meaningful snippet from available data
+    const snippet = `Organism: ${organism}. Effect: ${lifespanEffect} (${lifespanChange}). Hallmark: ${hallmark}. Intervention: ${intervention}.`;
 
     return {
-        title: `${record.gene_symbol} (${record.gene_name})`,
-        link: `https://open-genes.com/gene/${record.gene_symbol}`,
-        snippet: `Organism: ${organism}. Effect: ${record.lifespan_effect} (${lifespanChange}). Hallmark: ${hallmark}. Intervention: ${intervention}. Summary: ${record.summary_of_the_finding}`,
+        title: `${record.symbol} (${record.name})`,
+        link: `https://open-genes.com/api/gene/${record.symbol}`,
+        snippet: snippet,
         source: SearchDataSource.OpenGenes,
     };
 };
@@ -353,7 +370,7 @@ export const performFederatedSearch = async (
             case SearchDataSource.OpenGenes:
                 return (async () => {
                     const openGenesResults = await searchOpenGenesAPI(query, addLog);
-                    return openGenesResults.map(mapOpenGeneRecordToSearchResult);
+                    return openGenesResults.map(mapGeneSearchedToSearchResult);
                 })();
             default: return Promise.resolve([]);
         }

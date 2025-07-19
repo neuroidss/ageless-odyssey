@@ -1,23 +1,29 @@
 
-export interface OpenGeneAPIResponse {
-    count: number;
-    next: string | null;
-    previous: string | null;
-    results: OpenGeneRecord[];
+export interface GeneSearchedRecord {
+    id: number;
+    symbol: string;
+    name: string;
+    researches?: {
+        increaseLifespan?: {
+            modelOrganism: string;
+            interventionResultForLifespan: string;
+            lifespanMeanChangePercent?: number;
+            lifespanMinChangePercent?: number;
+            lifespanMaxChangePercent?: number;
+            interventions?: {
+                controlAndExperiment: any[],
+                experiment: {
+                    interventionMethod: string;
+                }[]
+            };
+        }[];
+    };
+    agingMechanisms?: { name: string; }[];
 }
 
-export interface OpenGeneRecord {
-    id: number;
-    gene_symbol: string;
-    gene_name: string;
-    organism: { name: string; };
-    lifespan_effect: 'pro-longevity' | 'anti-longevity' | 'unclear';
-    lifespan_change_max_percent: number;
-    lifespan_change_min_percent: number;
-    hallmarks_of_aging: { name: string; }[];
-    interventions: { intervention_type: { name: string; } }[];
-    primary_citation_pubmed_id: string;
-    summary_of_the_finding: string;
+export interface OpenGeneSearchResponse {
+    options: any;
+    items: GeneSearchedRecord[];
 }
 
 
@@ -27,8 +33,8 @@ export interface OpenGeneRecord {
  * @param addLog A function for logging debug messages.
  * @returns An array of matching gene records from the API.
  */
-export const searchOpenGenesAPI = async (query: string, addLog: (message: string) => void): Promise<OpenGeneRecord[]> => {
-    const searchUrl = `https://open-genes.com/api/v1/genes/?search=${encodeURIComponent(query)}&page_size=10`;
+export const searchOpenGenesAPI = async (query: string, addLog: (message: string) => void): Promise<GeneSearchedRecord[]> => {
+    const searchUrl = `https://open-genes.com/api/gene/search?bySuggestions=${encodeURIComponent(query)}&pageSize=10`;
     addLog(`[Search.OpenGenes] Querying live API at: ${searchUrl}`);
 
     if (!query) {
@@ -48,9 +54,9 @@ export const searchOpenGenesAPI = async (query: string, addLog: (message: string
             throw new Error(`API request failed with status ${response.status}: ${errorText}`);
         }
 
-        const data: OpenGeneAPIResponse = await response.json();
-        addLog(`[Search.OpenGenes] Found ${data.results.length} matches from API.`);
-        return data.results;
+        const data: OpenGeneSearchResponse = await response.json();
+        addLog(`[Search.OpenGenes] Found ${data.items.length} matches from API.`);
+        return data.items;
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
