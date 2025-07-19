@@ -191,13 +191,6 @@ export const generateTextWithHuggingFace = async (
         
         addLog(`[HuggingFace] Text generation successful. Raw length: ${finalText.length}`);
         
-        const thinkTagRegex = /<think>[\s\S]*?<\/think>/gi;
-        if (thinkTagRegex.test(finalText)) {
-            const originalLength = finalText.length;
-            finalText = finalText.replace(thinkTagRegex, '').trim();
-            addLog(`[HuggingFace] Removed <think> tags from the response. New length: ${finalText.length} (was ${originalLength})`);
-        }
-        
         return finalText;
 
     } catch (error) {

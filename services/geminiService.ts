@@ -38,17 +38,7 @@ const callOllamaAPI = async (modelId: string, systemInstruction: string, userPro
         const data = await response.json();
         addLog(`[Ollama] Successfully received response from model '${modelId}'. Raw length: ${data.response?.length || 0}`);
         
-        let cleanedResponse = data.response || '';
-
-        // Remove <think>...</think> blocks that some models (like Qwen) might output.
-        const thinkTagRegex = /<think>[\s\S]*?<\/think>/gi;
-        if (thinkTagRegex.test(cleanedResponse)) {
-            const originalLength = cleanedResponse.length;
-            cleanedResponse = cleanedResponse.replace(thinkTagRegex, '').trim();
-            addLog(`[Ollama] Removed <think> tags from the response. New length: ${cleanedResponse.length} (was ${originalLength})`);
-        }
-        
-        return cleanedResponse;
+        return data.response || '';
 
     } catch (error) {
         addLog(`[Ollama] ERROR: Failed to connect to Ollama server. ${error}`);
@@ -79,9 +69,12 @@ export const dispatchAgent = async (
 
         const isGoogleModel = model.provider === ModelProvider.GoogleAI;
         const needsSearch = agentType !== AgentType.QuestCrafter;
+        const isGoogleGemma = isGoogleModel && model.id.includes('gemma');
 
-        if (!isGoogleModel && needsSearch) {
-            addLog(`[Search] Local model detected (${model.provider}). Initiating federated search for context...`);
+        // If the model is not a Google model OR it is a Google Gemma model, perform federated search.
+        if ((!isGoogleModel || isGoogleGemma) && needsSearch) {
+            const modelType = isGoogleGemma ? 'Google Gemma' : 'Local';
+            addLog(`[Search] ${modelType} model detected (${model.provider}). Initiating federated search for context...`);
             if (setProgress) setProgress('Performing search for context...');
             try {
                 const searchResults = await performFederatedSearch(query, searchSources, addLog);
@@ -96,10 +89,10 @@ export const dispatchAgent = async (
             } catch (searchError) {
                 const message = searchError instanceof Error ? searchError.message : String(searchError);
                 addLog(`[Search] ERROR: Federated search failed. Aborting agent dispatch. Error: ${message}`);
-                throw new Error(`Federated search failed, cannot proceed with local model. Error: ${message}`);
+                throw new Error(`Federated search failed, cannot proceed. Error: ${message}`);
             }
-        } else if (isGoogleModel && needsSearch) {
-            addLog(`[Search] Google AI model detected. Skipping local search, will use Google Search grounding.`);
+        } else if (isGoogleModel && !isGoogleGemma && needsSearch) {
+            addLog(`[Search] Google Gemini model detected. Skipping local search, will use Google Search grounding.`);
         }
         
         const { systemInstruction, userPrompt, responseSchema } = buildAgentPrompts(query, agentType, searchContext, model.provider, trendContext, ragContext);
@@ -132,24 +125,30 @@ export const dispatchAgent = async (
             
             addLog(`[GoogleAI] Calling model '${model.id}'...`);
             
-            const useGoogleSearch = needsSearch;
+            const modelConfig: any = {};
+            let finalUserPrompt = userPrompt;
 
-            const modelConfig: any = {
-                systemInstruction: finalSystemInstruction,
-            };
-
-            if (useGoogleSearch) {
-                modelConfig.tools = [{ googleSearch: {} }];
-                addLog(`[GoogleAI] Enabled Google Search tool. JSON response format is disabled as per API requirements.`);
-            } else if (responseSchema) {
-                modelConfig.responseMimeType = 'application/json';
-                modelConfig.responseSchema = responseSchema;
-                addLog(`[GoogleAI] JSON response format enabled with schema.`);
+            if (isGoogleGemma) {
+                // Gemma models do not support systemInstruction or responseSchema. Prepend system instruction to user prompt.
+                // The system prompt already contains the necessary "you must output JSON" instruction.
+                finalUserPrompt = `${finalSystemInstruction}\n\n${userPrompt}`;
+                addLog('[GoogleAI] Gemma model detected. Prepending system instruction to user prompt. Expecting JSON in text response.');
+            } else { // It's a Gemini model
+                modelConfig.systemInstruction = finalSystemInstruction;
+                const useGoogleSearch = needsSearch; // isGoogleGemma is false here
+                if (useGoogleSearch) {
+                    modelConfig.tools = [{ googleSearch: {} }];
+                    addLog(`[GoogleAI] Enabled Google Search tool for Gemini model.`);
+                } else if (responseSchema) {
+                    modelConfig.responseMimeType = 'application/json';
+                    modelConfig.responseSchema = responseSchema;
+                    addLog(`[GoogleAI] JSON response format enabled with schema for Gemini model.`);
+                }
             }
             
             const response = await ai.models.generateContent({
                 model: model.id,
-                contents: userPrompt,
+                contents: finalUserPrompt,
                 config: modelConfig,
             });
             
@@ -194,9 +193,33 @@ export const dispatchAgent = async (
         return finalAgentResponse;
 
     } catch (e) {
-        const message = e instanceof Error ? e.message : 'An unknown error occurred';
-        addLog(`[dispatchAgent] FATAL ERROR: ${message}`);
-        throw e;
+        let finalErrorMessage: string;
+
+        // Check for the specific Gemini API error structure from user logs
+        const errorCandidate = e as any;
+        if (errorCandidate?.error?.message && errorCandidate?.error?.status) {
+            // New error from user log: "Developer instruction is not enabled for models/gemma-3n-e4b-it"
+            finalErrorMessage = `Google AI API Error: ${errorCandidate.error.message} (Status: ${errorCandidate.error.status})`;
+        }
+        else if (errorCandidate?.error?.status === 'RESOURCE_EXHAUSTED' || errorCandidate?.error?.code === 429) {
+            if (model.id.includes('gemma')) {
+                finalErrorMessage = "Rate limit reached for Gemma model. The free tier is often limited to 1 request per minute. Please wait 60 seconds or switch to a Gemini model.";
+            } else {
+                finalErrorMessage = `API resource exhausted. This may be due to rate limits. Please check your usage quota. (Status: ${errorCandidate.error.status})`;
+            }
+        } else if (e instanceof Error) {
+            finalErrorMessage = e.message;
+        } else if (errorCandidate?.error?.message) {
+            finalErrorMessage = `Google AI API Error: ${errorCandidate.error.message}`;
+        } else {
+            finalErrorMessage = 'An unknown error occurred during agent dispatch.';
+            // Add raw error to log for debugging
+            addLog(`[dispatchAgent] Raw unknown error: ${JSON.stringify(e)}`);
+        }
+        
+        addLog(`[dispatchAgent] FATAL ERROR: ${finalErrorMessage}`);
+        // Throw a proper Error object so the UI layer can handle it consistently.
+        throw new Error(finalErrorMessage);
     }
 };
 
@@ -229,14 +252,23 @@ export const synthesizeFindings = async (
     // Google AI
     const key = (apiKey || process.env.API_KEY)?.trim();
     if (!key) throw new Error("API Key for Google AI is not provided.");
-
     const ai = new GoogleGenAI({ apiKey: key });
+
+    const isGoogleGemma = model.id.includes('gemma');
+    let finalUserPrompt = userPrompt;
+    const modelConfig: any = {};
+
+    if (isGoogleGemma) {
+        finalUserPrompt = `${systemInstruction}\n\n${userPrompt}`;
+        addLog(`[Synthesize] Using Gemma model. Combining system and user prompts.`);
+    } else {
+        modelConfig.systemInstruction = systemInstruction;
+    }
+
     const response = await ai.models.generateContent({
         model: model.id,
-        contents: userPrompt,
-        config: {
-            systemInstruction: systemInstruction,
-        }
+        contents: finalUserPrompt,
+        config: modelConfig,
     });
 
     if (!response.text) {

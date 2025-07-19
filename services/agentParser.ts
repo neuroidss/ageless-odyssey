@@ -1,21 +1,31 @@
 import { type AgentResponse, type WorkspaceItem, AgentType, GeneData } from '../types';
 
 export const parseJsonFromText = (text: string, addLog: (msg: string) => void): string => {
-    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    let cleanedText = text;
+
+    // Remove <think>...</think> blocks that some models (like Qwen) might output.
+    const thinkTagRegex = /<think>[\s\S]*?<\/think>/gi;
+    if (thinkTagRegex.test(cleanedText)) {
+        const originalLength = cleanedText.length;
+        cleanedText = cleanedText.replace(thinkTagRegex, '').trim();
+        addLog(`[Parser] Removed <think> tags from the response. New length: ${cleanedText.length} (was ${originalLength})`);
+    }
+    
+    const jsonMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
         addLog('[Parser] Extracted JSON from markdown code block.');
         return jsonMatch[1];
     }
     
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
+    const firstBrace = cleanedText.indexOf('{');
+    const lastBrace = cleanedText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace > firstBrace) {
         addLog('[Parser] Extracted JSON by finding curly braces.');
-        return text.substring(firstBrace, lastBrace + 1);
+        return cleanedText.substring(firstBrace, lastBrace + 1);
     }
     
     addLog(`[Parser] WARN: Could not find any JSON-like structures in the response. Using raw text, which will likely fail parsing.`);
-    return text;
+    return cleanedText;
 };
 
 export const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg: string) => void): AgentResponse => {
