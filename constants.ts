@@ -173,7 +173,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.TrendSpotter, topicKeywords: ['longevity', 'rejuvenation', 'anti-aging'] },
         reward: { xp: 100, memic: 150, genetic: 0 },
         citations: [
-            { title: "The Hallmarks of Aging (López-Otín et al., 2013)", url: "https://www.cell.com/cell/fulltext/S0092-8674(13)00645-4" }
+            { title: "The Hallmarks of Aging (López-Otín et al., 2013)", url: "https://doi.org/10.1016/j.cell.2013.05.039" }
         ],
         unlocksAchievement: 'EXPONENTIAL_THINKER',
         realmRequirement: Realm.MortalShell,
@@ -186,7 +186,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['senolytics', 'dasatinib', 'quercetin'] },
         reward: { xp: 150, memic: 200, genetic: 50, benchmark: 5 },
         citations: [
-            { title: "The Clinical Potential of Senolytics (Kirkland & Tchkonia, 2020)", url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400228/" }
+            { title: "The Clinical Potential of Senolytics (Kirkland & Tchkonia, 2020)", url: "https://doi.org/10.1172/jci.insight.140316" }
         ],
         unlocksAchievement: 'BIO_STRATEGIST',
         unlocksIntervention: 'senolytics',
@@ -200,7 +200,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['NAD+', 'precursors', 'NMN', 'NR'] },
         reward: { xp: 150, memic: 200, genetic: 50 },
         citations: [
-            { title: "The NAD+ precursor nicotinamide riboside enhances oxidative metabolism (Cantó et al., 2012)", url: "https://www.cell.com/cell-metabolism/fulltext/S1550-4131(12)00192-1" }
+            { title: "The NAD+ precursor nicotinamide riboside enhances oxidative metabolism (Cantó et al., 2012)", url: "https://doi.org/10.1016/j.cmet.2012.05.007" }
         ],
         unlocksIntervention: 'nad_precursors',
         realmRequirement: Realm.MortalShell,
@@ -213,7 +213,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.GeneAnalyst, topicKeywords: ['FOXO3', 'longevity'] },
         reward: { xp: 200, memic: 250, genetic: 75, benchmark: 10 },
         citations: [
-            { title: "FOXO3A genotype is strongly associated with human longevity (Willcox et al., 2008)", url: "https://www.pnas.org/doi/10.1073/pnas.0801030105" }
+            { title: "FOXO3A genotype is strongly associated with human longevity (Willcox et al., 2008)", url: "https://doi.org/10.1073/pnas.0801030105" }
         ],
         unlocksAchievement: 'KNOWLEDGE_ARCHITECT',
         realmRequirement: Realm.BiologicalOptimizer,
@@ -226,7 +226,7 @@ export const QUESTS: Quest[] = [
         objective: { agent: AgentType.TrendSpotter, topicKeywords: ['brain-computer interface', 'neural lace', 'exocortex'] },
         reward: { xp: 500, memic: 1000, genetic: 250 },
         citations: [
-            { title: "High-performance brain-to-text communication via imagined handwriting (Willett et al., 2021)", url: "https://www.nature.com/articles/s41586-021-03506-2" }
+            { title: "High-performance brain-to-text communication via imagined handwriting (Willett et al., 2021)", url: "https://doi.org/10.1038/s41586-021-03506-2" }
         ],
         unlocksAchievement: 'TRANSHUMANIST',
         unlocksIntervention: 'neuro_interface',
