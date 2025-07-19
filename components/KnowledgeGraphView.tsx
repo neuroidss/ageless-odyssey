@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { KnowledgeGraph, KnowledgeGraphNode } from '../types';
 import { GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon } from './icons';
 
@@ -56,6 +56,13 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
 
     const simulationLoop = useRef<(() => void) | undefined>(undefined);
 
+    const { uniqueNodes, uniqueEdges } = useMemo(() => {
+        const nodes = Array.from(new Map(graph.nodes.map(node => node && [node.id, node])).values()).filter(Boolean) as KnowledgeGraphNode[];
+        const edges = Array.from(new Map(graph.edges.map(edge => edge && [`${edge.source}-${edge.target}-${edge.label}`, edge])).values()).filter(Boolean);
+        return { uniqueNodes: nodes, uniqueEdges: edges };
+    }, [graph]);
+
+
     useEffect(() => {
         if (!svgRef.current) return;
 
@@ -67,7 +74,7 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
         positionRef.current = { ...positions };
         
         // Initialize positions for new nodes that aren't already positioned
-        graph.nodes.forEach(node => {
+        uniqueNodes.forEach(node => {
             if (!positionRef.current![node.id]) {
                 positionRef.current![node.id] = {
                     x: width / 2 + (Math.random() - 0.5) * 100,
@@ -87,15 +94,15 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
             const forces: { [id: string]: { x: number; y: number } } = {};
             let totalKineticEnergy = 0;
 
-            graph.nodes.forEach(node => {
+            uniqueNodes.forEach(node => {
                 forces[node.id] = { x: 0, y: 0 };
             });
 
             // Repulsion force
-            for (let i = 0; i < graph.nodes.length; i++) {
-                for (let j = i + 1; j < graph.nodes.length; j++) {
-                    const node1 = graph.nodes[i];
-                    const node2 = graph.nodes[j];
+            for (let i = 0; i < uniqueNodes.length; i++) {
+                for (let j = i + 1; j < uniqueNodes.length; j++) {
+                    const node1 = uniqueNodes[i];
+                    const node2 = uniqueNodes[j];
                     const pos1 = currentPositions[node1.id];
                     const pos2 = currentPositions[node2.id];
                     if (!pos1 || !pos2) continue;
@@ -116,9 +123,9 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
             }
 
             // Attraction force (spring)
-            graph.edges.forEach(edge => {
-                const sourceNode = graph.nodes.find(n => n.id === edge.source);
-                const targetNode = graph.nodes.find(n => n.id === edge.target);
+            uniqueEdges.forEach(edge => {
+                const sourceNode = uniqueNodes.find(n => n.id === edge.source);
+                const targetNode = uniqueNodes.find(n => n.id === edge.target);
                 if (!sourceNode || !targetNode) return;
                 
                 const sourcePos = currentPositions[edge.source];
@@ -143,7 +150,7 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
             });
 
             // Gravity towards center
-            graph.nodes.forEach(node => {
+            uniqueNodes.forEach(node => {
                 const pos = currentPositions[node.id];
                  if (!pos) return;
                 const dx = width / 2 - pos.x;
@@ -154,7 +161,7 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
             
             // Update velocities and positions
             const nextPositions = { ...currentPositions };
-            graph.nodes.forEach(node => {
+            uniqueNodes.forEach(node => {
                 if (draggedNodeId.current === node.id) return;
                 if (!velocities.current[node.id] || !nextPositions[node.id]) return;
 
@@ -189,7 +196,7 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
                 animationFrameId.current = undefined;
             }
         };
-    }, [graph]);
+    }, [uniqueNodes, uniqueEdges]);
 
     const handleMouseDown = (e: React.MouseEvent, nodeId: string) => {
         draggedNodeId.current = nodeId;
@@ -236,7 +243,7 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
                 </marker>
             </defs>
             <g className="edges">
-                {graph.edges.map((edge, i) => {
+                {uniqueEdges.map((edge) => {
                     const sourcePos = positions[edge.source];
                     const targetPos = positions[edge.target];
                     if (!sourcePos || !targetPos) return null;
@@ -248,11 +255,11 @@ const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ graph }) => {
                     const targetX = targetPos.x - (dx / distance) * NODE_RADIUS;
                     const targetY = targetPos.y - (dy / distance) * NODE_RADIUS;
                     
-                    return <line key={`${edge.source}-${edge.target}-${i}`} x1={sourcePos.x} y1={sourcePos.y} x2={targetX} y2={targetY} stroke="#6B7280" strokeWidth="1.5" markerEnd="url(#arrowhead)" />;
+                    return <line key={`${edge.source}-${edge.target}-${edge.label}`} x1={sourcePos.x} y1={sourcePos.y} x2={targetX} y2={targetY} stroke="#6B7280" strokeWidth="1.5" markerEnd="url(#arrowhead)" />;
                 })}
             </g>
             <g className="nodes">
-                {graph.nodes.map(node => {
+                {uniqueNodes.map(node => {
                     const pos = positions[node.id];
                     if (!pos) return null;
                     const color = getNodeColor(node.type);

@@ -69,7 +69,12 @@ export const useAutonomousAgent = (props: AutonomousAgentProps) => {
         const timeRemainingToday = oneDay - timeElapsedToday;
         const callsRemaining = agentBudget - agentCallsMade;
         const calculatedInterval = callsRemaining > 0 ? timeRemainingToday / callsRemaining : timeRemainingToday;
-        const finalInterval = agentCallsMade === 0 ? Math.min(calculatedInterval, 10 * 1000) : calculatedInterval;
+        
+        // Ensure a minimum interval to be respectful to public APIs.
+        const MIN_INTERVAL = 60 * 1000; // 1 minute
+        // For the first call, use a fixed delay. For subsequent calls, use the calculated interval but respect the minimum.
+        const finalInterval = agentCallsMade === 0 ? 30000 : Math.max(calculatedInterval, MIN_INTERVAL);
+
 
         addLog(`[Autonomous] Calls remaining: ${callsRemaining}/${agentBudget}. Next call in ${(finalInterval / 60000).toFixed(1)} mins.`);
 
@@ -89,7 +94,7 @@ export const useAutonomousAgent = (props: AutonomousAgentProps) => {
                 // This is a limitation of this refactoring. The logic should be elevated or quest state passed down.
                 // For now, we rely on `handleQuestCompletion` passed in.
 
-                if ((response.items || []).length > 0) {
+                if (response && (response.items || []).length > 0) {
                     setHasSearched(true);
                     setWorkspaceHistory(prevHistory => {
                         const lastWorkspace = prevHistory.length > 0 ? prevHistory[prevHistory.length - 1] : null;
