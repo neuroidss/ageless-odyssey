@@ -22,28 +22,23 @@ The Ageless Odyssey is an interactive simulation where you direct the course of 
     *   **In-Browser Models**: Experiment with Hugging Face Transformers.js models running directly in your browser via WebGPU or WASM.
 *   **Autonomous Mode**: Enable an autonomous agent to continuously scan the horizon for radical life extension trends in the background.
 
-## How to Run Locally
+## Run Locally
 
-This project is a static web application and does not require a Node.js environment or `npm` commands.
+**Prerequisites:** [Node.js](https://nodejs.org/)
 
-**Prerequisites:**
-*   A modern web browser (like Chrome, Firefox, or Edge).
-*   (Recommended) A local web server to avoid browser security restrictions (CORS).
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+2.  **Set up your environment:**
+    Create a file named `.env.local` in the project's root directory. Inside this file, add your Gemini API key:
+    ```
+    GEMINI_API_KEY=YOUR_API_KEY_HERE
+    ```
+    This step is required to use Google AI models. For local models (Ollama, Hugging Face), this can be left blank, but the file should still exist.
 
-**Instructions:**
-1.  Download or clone the project files to your local machine.
-2.  For full functionality with local models, ensure you have [Ollama](https://ollama.com/) installed and running.
-3.  To avoid potential browser security restrictions when loading models, it's best to serve the files using a simple local web server.
-    *   If you use **Visual Studio Code**, you can install the [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) extension. Right-click on `index.html` and choose "Open with Live Server".
-    *   Alternatively, you can use Python's built-in server by running `python -m http.server` in the project's root directory.
-4.  Once the server is running, open the provided local URL in your browser (e.g., `http://127.0.0.1:5500/` or `http://localhost:8000`).
-
-### Using AI Models
-
-*   **Local Models (Ollama / Hugging Face):** Select them from the "Advanced Settings" panel within the app. No API key is needed.
-*   **Google AI (Gemini):** To use the Google AI models, you must provide your API key.
-    1.  Click on the "Advanced Settings" button in the app.
-    2.  Select a Google AI model from the dropdown.
-    3.  An input field will appear. Paste your Google AI API Key here.
-    
-    *Your key is stored temporarily in your browser's session storage and is only used to communicate with the Google AI API. It is not saved to any files.*
+3.  **Run the development server:**
+    ```bash
+    npm run dev
+    ```
+This will start the development server, and you can view the application in your browser at the local URL provided in your terminal (usually `http://localhost:5173` or similar).
