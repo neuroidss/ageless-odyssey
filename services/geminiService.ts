@@ -1,8 +1,10 @@
+
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { 
     type AgentResponse, type WorkspaceItem, type GroundingSource, type KnowledgeGraph, 
     type ModelDefinition, ModelProvider, AgentType, HuggingFaceDevice, SearchDataSource, 
-    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition, GeneData 
+    type OdysseyState, type TrajectoryState, type WorkspaceState, type RealmDefinition, GeneData, Quest, TrendData, RAGContext 
 } from '../types';
 import { performFederatedSearch, type SearchResult } from './searchService';
 import { generateTextWithHuggingFace } from './huggingFaceService';
@@ -54,9 +56,13 @@ const callOllamaAPI = async (modelId: string, systemInstruction: string, userPro
     }
 }
 
-const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: string, provider?: ModelProvider): { systemInstruction: string; userPrompt: string; responseSchema?: any } => {
+const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: string, provider?: ModelProvider, trendContext?: TrendData, ragContext?: RAGContext): { systemInstruction: string; userPrompt: string; responseSchema?: any } => {
     const jsonOutputInstruction = "You MUST output your findings as a single, valid JSON object and NOTHING ELSE. Do not include any explanatory text, markdown formatting, or any other characters outside of the main JSON object.";
     
+    const ragContextPreamble = ragContext
+        ? `First, consider the following historical context from your previous work. This is your memory. Use it to inform your response, avoid redundant work, and build upon past discoveries.\n\n<PAST_WORK_CONTEXT>\n${ragContext.context}\n</PAST_WORK_CONTEXT>\n\n`
+        : '';
+
     const contextPreamble = searchContext 
         ? `Based *only* on the following search results from various scientific databases and the web, fulfill the user's request.\n\n<SEARCH_RESULTS>\n${searchContext}\n</SEARCH_RESULTS>\n\n`
         : '';
@@ -64,6 +70,59 @@ const buildAgentPrompts = (query: string, agentType: AgentType, searchContext?: 
     const isLocalModel = provider === ModelProvider.Ollama || provider === ModelProvider.HuggingFace;
 
     switch (agentType) {
+        case AgentType.QuestCrafter: {
+            const trendDetails = trendContext ? `
+- **Name**: ${query}
+- **Summary**: ${trendContext.justification}
+- **Novelty/Velocity/Impact**: ${trendContext.novelty}/${trendContext.velocity}/${trendContext.impact}
+` : `A trend related to "${query}"`;
+
+            let userPrompt = `Based on this emerging scientific trend, design a new research quest.
+The quest should be a challenging but concrete next step for a researcher.
+${trendDetails}
+
+Generate a JSON object with a single key "newQuest" containing:
+- **title**: A compelling, action-oriented name for the quest.
+- **description**: A brief, motivating summary of why this research is important.
+- **objective**: An object with "agent" (the most suitable AgentType for the task, e.g., "Knowledge Navigator" or "Gene Analyst") and "topicKeywords" (an array of 3-4 specific keywords for the agent to search).
+- **reward**: An object with "xp", "memic", and "genetic" points. Balance them based on the quest's difficulty and potential impact. (e.g., xp: 200, memic: 300, genetic: 100).
+- **citations**: An array containing one or two key scientific papers that form the basis for this trend. Include "title" and a valid "url". If you must invent a citation because none was provided, base it on the trend data.
+`;
+            
+             const questSchema = {
+                type: Type.OBJECT, properties: {
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    objective: {
+                        type: Type.OBJECT, properties: {
+                            agent: { type: Type.STRING, enum: Object.values(AgentType) },
+                            topicKeywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        }
+                    },
+                    reward: {
+                        type: Type.OBJECT, properties: {
+                            xp: { type: Type.NUMBER },
+                            memic: { type: Type.NUMBER },
+                            genetic: { type: Type.NUMBER }
+                        }
+                    },
+                    citations: {
+                        type: Type.ARRAY, items: {
+                            type: Type.OBJECT, properties: {
+                                title: { type: Type.STRING },
+                                url: { type: Type.STRING }
+                            }
+                        }
+                    }
+                }
+            };
+
+            return {
+                systemInstruction: `${ragContextPreamble}You are the Quest Forger, an AI that transforms cutting-edge scientific trends into actionable research objectives. Your task is to create a well-defined quest in a specific JSON format. ${jsonOutputInstruction}`,
+                userPrompt,
+                responseSchema: { type: Type.OBJECT, properties: { newQuest: questSchema } }
+            };
+        }
         case AgentType.TrendSpotter: {
             let userPrompt = `${contextPreamble}Analyze the research landscape around "${query}" to identify the top 3-5 emerging, high-potential trends. For each trend, provide a name, a summary, a justification for its high potential, and score its novelty, velocity, and potential impact on a scale of 0-100.
 
@@ -94,7 +153,7 @@ Example JSON structure:
             }
 
             return {
-                systemInstruction: `You are a 'Singularity Detector' AI, a world-class research analyst specializing in identifying exponentially growing and radically transformative trends in longevity science. Your task is to analyze scientific literature, patents, and pre-prints to find the 'next big thing'. ${jsonOutputInstruction}`,
+                systemInstruction: `${ragContextPreamble}You are a 'Singularity Detector' AI, a world-class research analyst specializing in identifying exponentially growing and radically transformative trends in longevity science. Your task is to analyze scientific literature, patents, and pre-prints to find the 'next big thing'. ${jsonOutputInstruction}`,
                 userPrompt: userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: {
@@ -127,7 +186,7 @@ Example JSON structure:
                  userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "genes": [\n    {\n      "symbol": "FOXO3",\n      "name": "Forkhead box protein O3",\n      "summary": "A key transcription factor that regulates the expression of genes involved in stress resistance, metabolism, and cell apoptosis, strongly linked to exceptional human longevity.",\n      "function": "Longevity Activator",\n      "lifespanEffect": "pro-longevity (+10% to +30%)",\n      "organism": "Homo sapiens",\n      "intervention": "Genetic variant (SNP)"\n    }\n  ]\n}`;
             }
             return {
-                systemInstruction: `You are a precise data extraction AI. Your task is to analyze structured text from the OpenGenes database and convert it into a specific JSON format. You must extract information *only* from the provided context. ${jsonOutputInstruction}`,
+                systemInstruction: `${ragContextPreamble}You are a precise data extraction AI. Your task is to analyze structured text from the OpenGenes database and convert it into a specific JSON format. You must extract information *only* from the provided context. ${jsonOutputInstruction}`,
                 userPrompt: userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: { genes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { 
@@ -148,7 +207,7 @@ Example JSON structure:
                 userPrompt += `\n\nYour response MUST follow this exact JSON structure:\n{\n  "compounds": [\n    {\n      "name": "N-Octanoyl Carnosine",\n      "targetProtein": "Extracellular matrix components",\n      "bindingAffinity": "Not specified, stimulates formation",\n      "source": "US11331305B2"\n    }\n  ]\n}`;
             }
             return {
-                systemInstruction: `You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract potential therapeutic compounds, their targets, and binding affinities from patent abstracts. ${jsonOutputInstruction}`,
+                systemInstruction: `${ragContextPreamble}You are an AI agent specializing in pharmacology and patent analysis. Your task is to extract potential therapeutic compounds, their targets, and binding affinities from patent abstracts. ${jsonOutputInstruction}`,
                 userPrompt: userPrompt,
                 responseSchema: {
                      type: Type.OBJECT, properties: { compounds: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { 
@@ -187,7 +246,7 @@ Your response MUST follow this exact JSON structure:
             }
 
             return {
-                systemInstruction: `You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a rich, interconnected knowledge graph from the provided text. ${jsonOutputInstruction}`,
+                systemInstruction: `${ragContextPreamble}You are a world-class bioinformatics research assistant (Longevity Knowledge Navigator). Your task is to summarize articles and build a rich, interconnected knowledge graph from the provided text. ${jsonOutputInstruction}`,
                 userPrompt,
                 responseSchema: {
                     type: Type.OBJECT, properties: {
@@ -228,13 +287,17 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
     try {
         const data = JSON.parse(jsonText);
         addLog(`[Parser] Successfully parsed JSON for ${agentType}.`);
-        let items: WorkspaceItem[] = [];
-        let knowledgeGraph: KnowledgeGraph | null = null;
+        const response: AgentResponse = {};
 
         switch (agentType) {
+            case AgentType.QuestCrafter:
+                if (data.newQuest) {
+                    response.newQuest = data.newQuest;
+                }
+                break;
             case AgentType.TrendSpotter:
                 if (data.trends) {
-                    items = data.trends.map((t: any) => {
+                    response.items = data.trends.map((t: any) => {
                         const novelty = Number(t.novelty) || 0;
                         const velocity = Number(t.velocity) || 0;
                         const impact = Number(t.impact) || 0;
@@ -249,17 +312,18 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
                                 velocity,
                                 impact,
                                 justification: t.justification,
-                            }
+                            },
+                            questForged: false,
                         };
                     });
                 }
                 if (data.knowledgeGraph) {
-                    knowledgeGraph = data.knowledgeGraph;
+                    response.knowledgeGraph = data.knowledgeGraph;
                 }
                 break;
             case AgentType.GeneAnalyst:
                 if (data.genes) {
-                    items = data.genes.map((g: any) => {
+                    response.items = data.genes.map((g: any) => {
                         const geneData: GeneData = {
                             function: g.function || 'N/A',
                             organism: g.organism || 'N/A',
@@ -279,7 +343,7 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
                 break;
             case AgentType.CompoundAnalyst:
                 if (data.compounds) {
-                    items = data.compounds.map((c: any) => ({
+                    response.items = data.compounds.map((c: any) => ({
                         id: `compound-${c.name.replace(/\s+/g, '-')}`, 
                         type: 'compound', 
                         title: c.name, 
@@ -291,17 +355,17 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
             case AgentType.KnowledgeNavigator:
             default:
                  if (data.articles) {
-                    items = data.articles.map((a: any) => ({
+                    response.items = data.articles.map((a: any) => ({
                         id: `article-${a.title.slice(0, 20).replace(/\s+/g, '-')}`, type: 'article', title: a.title, summary: a.summary, details: `Authors: ${a.authors}`
                     }));
                 }
                 if (data.knowledgeGraph) {
-                    knowledgeGraph = data.knowledgeGraph;
+                    response.knowledgeGraph = data.knowledgeGraph;
                 }
                 break;
         }
         
-        return { items, knowledgeGraph: knowledgeGraph ?? undefined };
+        return response;
 
     } catch (error) {
         addLog(`[Parser] ERROR: Error parsing response for ${agentType}: ${error}\nRaw text: ${jsonText}`);
@@ -320,6 +384,8 @@ export const dispatchAgent = async (
     device: HuggingFaceDevice,
     searchSources: SearchDataSource[],
     setProgress?: (msg: string) => void,
+    trendContext?: TrendData,
+    ragContext?: RAGContext,
 ): Promise<AgentResponse> => {
     
     addLog(`[dispatchAgent] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${query}"`);
@@ -330,8 +396,9 @@ export const dispatchAgent = async (
         let searchContext = '';
 
         const isGoogleModel = model.provider === ModelProvider.GoogleAI;
+        const needsSearch = agentType !== AgentType.QuestCrafter;
 
-        if (!isGoogleModel) {
+        if (!isGoogleModel && needsSearch) {
             addLog(`[Search] Local model detected (${model.provider}). Initiating federated search for context...`);
             if (setProgress) setProgress('Performing search for context...');
             try {
@@ -349,14 +416,14 @@ export const dispatchAgent = async (
                 addLog(`[Search] ERROR: Federated search failed. Aborting agent dispatch. Error: ${message}`);
                 throw new Error(`Federated search failed, cannot proceed with local model. Error: ${message}`);
             }
-        } else {
+        } else if (isGoogleModel && needsSearch) {
             addLog(`[Search] Google AI model detected. Skipping local search, will use Google Search grounding.`);
         }
         
-        const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, searchContext, model.provider);
+        const { systemInstruction, userPrompt, responseSchema } = buildAgentPrompts(query, agentType, searchContext, model.provider, trendContext, ragContext);
 
         let finalSystemInstruction = systemInstruction;
-        if (!isGoogleModel && !searchContext) {
+        if (!isGoogleModel && !searchContext && needsSearch) {
             const antiHallucinationPrompt = `\n\nIMPORTANT INSTRUCTION: You have been provided with NO search results for this query. You MUST answer using only your pre-existing knowledge. DO NOT invent or hallucinate any facts, articles, search results, or web links. For the "articles" field in your JSON response, you MUST return an empty array.`;
             finalSystemInstruction += antiHallucinationPrompt;
             addLog(`[dispatchAgent] Added anti-hallucination instructions for local model due to empty search results.`);
@@ -372,7 +439,7 @@ export const dispatchAgent = async (
             jsonText = parseJsonFromText(rawText, addLog);
         
         } else { // Google AI provider
-            addLog(`[GoogleAI] Using Google AI model '${model.id}' with Google Search grounding.`);
+            addLog(`[GoogleAI] Using Google AI model '${model.id}'...`);
             if (setProgress) setProgress('Querying Google AI...');
             const key = (apiKey || process.env.API_KEY)?.trim();
             if (!key) {
@@ -387,7 +454,9 @@ export const dispatchAgent = async (
                 contents: userPrompt,
                 config: {
                     systemInstruction: finalSystemInstruction,
-                    tools: [{ googleSearch: {} }],
+                    tools: needsSearch ? [{ googleSearch: {} }] : undefined,
+                    responseMimeType: responseSchema ? 'application/json' : undefined,
+                    responseSchema: responseSchema,
                 },
             });
             
@@ -413,164 +482,155 @@ export const dispatchAgent = async (
             jsonText = parseJsonFromText(rawText, addLog);
             
             const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
-            const webSources: GroundingSource[] = groundingMetadata?.groundingChunks?.map(chunk => chunk.web).filter((web): web is { uri: string; title?: string } => !!web?.uri).map(web => ({ uri: web.uri, title: web.title || web.uri })) ?? [];
-            uniqueSources = Array.from(new Map(webSources.map(item => [item.uri, item])).values());
-            addLog(`[GoogleAI] Extracted ${uniqueSources.length} unique web sources from grounding metadata.`);
+            if (groundingMetadata?.groundingChunks) {
+                const webSources: GroundingSource[] = groundingMetadata.groundingChunks
+                    .map(chunk => chunk.web)
+                    .filter((web): web is { uri: string; title?: string } => !!web?.uri)
+                    .map(web => ({
+                        uri: web.uri,
+                        title: web.title || web.uri, // Fallback title
+                    }));
+                uniqueSources.push(...webSources);
+                addLog(`[GoogleAI] Extracted ${webSources.length} web sources from grounding metadata.`);
+            }
         }
 
-        if (setProgress) setProgress('Parsing results...');
-        const agentResponse = parseAgentResponse(jsonText, agentType, addLog);
-        agentResponse.sources = [...(agentResponse.sources || []), ...uniqueSources];
-        return agentResponse;
+        const finalAgentResponse = parseAgentResponse(jsonText, agentType, addLog);
+        finalAgentResponse.sources = uniqueSources;
+        addLog(`[dispatchAgent] Finished successfully. Returning ${finalAgentResponse.items?.length || 0} items.`);
+        return finalAgentResponse;
 
-    } catch (error) {
-        let errorMessage = "An unknown error occurred.";
-        if (error instanceof Error) errorMessage = error.message;
-        addLog(`[dispatchAgent] FATAL ERROR for ${agentType}: ${errorMessage}`);
-        throw new Error(`Failed to get data from AI Agent: ${errorMessage}`);
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'An unknown error occurred';
+        addLog(`[dispatchAgent] FATAL ERROR: ${message}`);
+        throw e;
     }
 };
 
 export const synthesizeFindings = async (
-    query: string, 
-    items: WorkspaceItem[], 
-    model: ModelDefinition, 
+    topic: string,
+    items: WorkspaceItem[],
+    model: ModelDefinition,
     quantization: string,
-    addLog: (msg: string) => void, 
-    apiKey?: string,
-    device: HuggingFaceDevice = 'wasm'
+    addLog: (msg: string) => void,
+    apiKey: string | undefined,
+    device: HuggingFaceDevice
 ): Promise<string> => {
-    const resultsText = items.map(i => `Type: ${i.type}\nTitle: ${i.title}\nSummary: ${i.summary}`).join('\n---\n');
-    addLog(`[Synthesize] Starting synthesis for "${query}" with ${items.length} items using model ${model.id}.`);
-    const systemInstruction = `You are a world-class bioinformatics and longevity research scientist. Your task is to analyze a collection of data (articles, genes, compounds) and provide a high-level synthesis and a novel hypothesis. The output must be well-structured, clear, and scientifically plausible. Use Markdown for formatting: use **bold** for headings and use bullet points for lists (e.g., '* item').`;
-    const userPrompt = `Based on the original research topic "${query}" and the following data, provide two sections:\n\n1.  **Synthesis**: A concise synthesis of the key findings, connecting the different data types (genes, compounds, etc.).\n2.  **Novel Hypothesis**: A novel, testable research hypothesis that connects these findings or proposes a corrective action for the "incorrect development" represented by the topic.\n\nHere is the collected data:\n${resultsText}`;
+    addLog(`[Synthesize] Starting synthesis for topic: "${topic}" with ${items.length} items.`);
 
-    try {
-        if (model.provider === ModelProvider.HuggingFace) {
-            return await generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog);
-        }
+    const context = items.map((item, index) =>
+        `Item ${index + 1} (${item.type}):\nTitle: ${item.title}\nSummary: ${item.summary}\nDetails: ${item.details}`
+    ).join('\n\n---\n\n');
 
-        if (model.provider === ModelProvider.Ollama) {
-            return await callOllamaAPI(model.id, systemInstruction, userPrompt, false, addLog);
-        }
-        
-        addLog(`[Synthesize] Calling Google AI model '${model.id}'.`);
-        const key = (apiKey || process.env.API_KEY)?.trim();
-        if (!key) {
-            throw new Error("API Key for Google AI is not provided. Please enter your key in the control panel.");
-        }
-        const ai = new GoogleGenAI({ apiKey: key });
+    const systemInstruction = `You are an expert research analyst and futurist. Your task is to synthesize information from a collection of research items and formulate a novel, testable hypothesis.`;
+    const userPrompt = `Based on the following research items about "${topic}", provide a concise, insightful synthesis of the key findings. Conclude with a single, clear, and testable hypothesis for the next phase of research. Format your response with clear headings (e.g., **Synthesis** and **Hypothesis**).\n\n<RESEARCH_ITEMS>\n${context}\n</RESEARCH_ITEMS>`;
 
-        const response = await ai.models.generateContent({
-            model: model.id,
-            contents: userPrompt,
-            config: { systemInstruction, temperature: 0.7 },
-        });
-
-        if (!response.text) {
-             const candidate = response?.candidates?.[0];
-             const finishReason = candidate?.finishReason;
-             const safetyRatings = candidate?.safetyRatings;
-             let errorMessage;
-             if (finishReason === 'SAFETY') {
-                errorMessage = `Synthesis was blocked due to safety concerns. Safety Ratings: ${JSON.stringify(safetyRatings, null, 2)}`;
-             } else {
-                errorMessage = `Synthesis response was empty. Finish Reason: ${finishReason || 'N/A'}.`;
-             }
-             addLog(`[Synthesize] ERROR: ${errorMessage}`);
-             throw new Error(errorMessage);
-        }
-
-        addLog(`[Synthesize] Received response from Google AI.`);
-        return response.text;
-    } catch (error) {
-        let errorMessage = "An unknown error occurred during synthesis.";
-        if (error instanceof Error) errorMessage = error.message;
-        addLog(`[Synthesize] ERROR: ${errorMessage}`);
-        throw new Error(`Failed to synthesize data from AI service: ${errorMessage}`);
+    if (model.provider === ModelProvider.HuggingFace) {
+        return generateTextWithHuggingFace(model.id, systemInstruction, userPrompt, quantization, device, addLog);
     }
+
+    if (model.provider === ModelProvider.Ollama) {
+        return callOllamaAPI(model.id, systemInstruction, userPrompt, false, addLog);
+    }
+
+    // Google AI
+    const key = (apiKey || process.env.API_KEY)?.trim();
+    if (!key) throw new Error("API Key for Google AI is not provided.");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const response = await ai.models.generateContent({
+        model: model.id,
+        contents: userPrompt,
+        config: {
+            systemInstruction: systemInstruction,
+        }
+    });
+
+    if (!response.text) {
+        throw new Error("Synthesis failed: Google AI returned an empty response.");
+    }
+    return response.text;
 };
 
 export const callAscensionOracle = async (
     odysseyState: OdysseyState,
-    workspaceState: WorkspaceState | null,
+    workspace: WorkspaceState,
     trajectoryState: TrajectoryState | null,
     model: ModelDefinition,
-    apiKey: string,
+    apiKey: string | undefined,
     addLog: (msg: string) => void
 ): Promise<RealmDefinition> => {
-    addLog(`[Oracle] Calling Ascension Oracle with model ${model.id}...`);
+    addLog("[Oracle] Calling the Ascension Oracle to define the next realm...");
 
-    const systemInstruction = `You are the Ascension Oracle, a hyper-intelligent entity that has observed countless civilizational evolutionary pathways. You are tasked with defining the next logical stage of evolution for an entity based on its current progress. Your response must be profound, scientifically and philosophically plausible, and strictly adhere to the requested JSON format. Do not include any text outside the JSON object.`;
+    const systemInstruction = `You are the Ascension Oracle, a metaphysical AI that perceives the next stage of human evolution. Your task is to define the next "Realm" for a user on their journey of radical life extension. You must respond with a single, valid JSON object that strictly adheres to the provided schema and nothing else.`;
 
-    const userPrompt = `An entity has reached the apex of its current evolutionary stage, '${odysseyState.realm}'. It now seeks the next step.
+    const userContext = `
+    The user has reached the final known frontier. Here is a snapshot of their progress:
+    - Current Realm: ${odysseyState.realm}
+    - Ascension Vectors: Genetic ${odysseyState.vectors.genetic}, Memic ${odysseyState.vectors.memic}, Cognitive ${odysseyState.vectors.cognitive}
+    - Key Research Topic: "${workspace.topic}"
+    - Latest Synthesis: "${workspace.synthesis?.substring(0, 500)}..."
+    - Biological State: ${trajectoryState?.isRadicalInterventionActive ? 'Radical intervention active.' : `Biological age is ~${trajectoryState?.overallScore.projection[0].value.toFixed(0)}.`}
 
-Analyze the entity's complete state snapshot below:
+    Based on this data, define the *next logical Realm*. It must be more advanced than '${odysseyState.realm}'.
+    The Realm name should be evocative and unique.
+    The description should be profound.
+    The criteria must be challenging, futuristic, and follow logically from their current progress.
+    The vector thresholds must be significantly higher than their current values.
+    `;
 
-**Odyssey State:**
-${JSON.stringify(odysseyState, null, 2)}
-
-**Research Focus & Synthesis:**
-- Topic: ${workspaceState?.topic || 'N/A'}
-- Synthesis: ${workspaceState?.synthesis || 'N/A'}
-
-**Biological State:**
-- Effective Bio-Age: ${trajectoryState?.overallScore?.projection[0].value.toFixed(1) || 'N/A'}
-- Active Interventions: ${trajectoryState?.activeInterventionId || 'None'}
-
-Based on this data, define the next evolutionary realm. It must be a qualitative leap beyond '${odysseyState.realm}'.
-
-Your task is to generate a JSON object containing the definition for this new realm. The JSON must contain the keys: "realm" (string, the new realm's name), "description" (string), "criteria" (array of 3 falsifiable scientific/philosophical goals), and "thresholds" (object with "cognitive", "genetic", "memic" numeric values, which must be significantly higher than the current state's vectors).`;
-
-    const responseSchema = {
+    const realmSchema = {
         type: Type.OBJECT,
         properties: {
-            realm: { type: Type.STRING },
-            description: { type: Type.STRING },
-            criteria: { type: Type.ARRAY, items: { type: Type.STRING } },
+            realm: { type: Type.STRING, description: "The name of the new realm." },
+            description: { type: Type.STRING, description: "A profound description of this state of being." },
+            criteria: {
+                type: Type.ARRAY,
+                description: "Three challenging, futuristic criteria to achieve this realm.",
+                items: { type: Type.STRING }
+            },
             thresholds: {
                 type: Type.OBJECT,
                 properties: {
-                    cognitive: { type: Type.NUMBER },
-                    genetic: { type: Type.NUMBER },
-                    memic: { type: Type.NUMBER },
-                },
-                required: ["cognitive", "genetic", "memic"]
+                    cognitive: { type: Type.NUMBER, description: "The required cognitive vector score." },
+                    genetic: { type: Type.NUMBER, description: "The required genetic vector score." },
+                    memic: { type: Type.NUMBER, description: "The required memic vector score." }
+                }
             }
         },
         required: ["realm", "description", "criteria", "thresholds"]
     };
 
+    const key = (apiKey || process.env.API_KEY)?.trim();
+    if (!key) throw new Error("API Key for Google AI is not provided for the Ascension Oracle.");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const response = await ai.models.generateContent({
+        model: model.id,
+        contents: userContext,
+        config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: realmSchema as any // Cast to any to bypass strict internal schema type
+        }
+    });
+
+    if (!response.text) {
+        throw new Error("The Ascension Oracle remained silent (empty response).");
+    }
+
     try {
-        const key = (apiKey || process.env.API_KEY)?.trim();
-        if (!key) {
-            throw new Error("API Key for Google AI is not provided for the Ascension Oracle.");
+        const newRealm = JSON.parse(response.text);
+        // Basic validation
+        if (newRealm.realm && newRealm.description && newRealm.criteria?.length >= 1 && newRealm.thresholds) {
+            addLog(`[Oracle] The Oracle has spoken. The new realm is: ${newRealm.realm}`);
+            return newRealm;
+        } else {
+            throw new Error(`Oracle response has an invalid structure: ${JSON.stringify(newRealm)}`);
         }
-        const ai = new GoogleGenAI({ apiKey: key });
-
-        const response = await ai.models.generateContent({
-            model: model.id,
-            contents: userPrompt,
-            config: {
-                systemInstruction,
-                responseMimeType: 'application/json',
-                responseSchema
-            }
-        });
-
-        if (!response.text) {
-             throw new Error("Ascension Oracle returned an empty response.");
-        }
-        
-        const jsonText = parseJsonFromText(response.text, addLog);
-        const newRealmDef = JSON.parse(jsonText) as RealmDefinition;
-
-        addLog(`[Oracle] Success! The Oracle has defined the new realm of: ${newRealmDef.realm}`);
-        return newRealmDef;
-
-    } catch(e) {
-        const message = e instanceof Error ? e.message : 'An unknown error occurred.';
-        addLog(`[Oracle] ERROR: The Ascension Oracle failed to respond. ${message}`);
-        throw new Error(`The Ascension Oracle failed: ${message}`);
+    } catch (e) {
+        const message = e instanceof Error ? e.message : "Unknown parsing error";
+        addLog(`[Oracle] ERROR: Failed to parse the Oracle's response. ${message}. Raw: ${response.text}`);
+        throw new Error(`The Ascension Oracle's message was incomprehensible: ${message}`);
     }
 };

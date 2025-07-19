@@ -1,11 +1,7 @@
-
-
-
-
 import React from 'react';
 import { type WorkspaceState, type WorkspaceItem, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon, NetworkIcon } from './icons';
+import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon, NetworkIcon, ForgeIcon } from './icons';
 import TrajectoryView from './TrajectoryView';
 import KnowledgeGraphView from './KnowledgeGraphView';
 
@@ -20,6 +16,7 @@ interface WorkspaceViewProps {
   isSynthesizing: boolean;
   synthesisError: string | null;
   onSynthesize: () => void;
+  onForgeQuest: (item: WorkspaceItem) => void;
   trajectoryState: TrajectoryState | null;
   onApplyIntervention: (interventionId: string | null) => void;
   loadingMessage: string;
@@ -38,7 +35,7 @@ const formatSynthesis = (text: string | null): string => {
     }).join('').replace(/<li>/g, '<ul><li>').replace(/<\/li>(?!<li>)/g, '</li></ul>').replace(/<\/li><li>/g, '</li><li>');
 };
 
-const TrendCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
+const TrendCard: React.FC<{ item: WorkspaceItem; onForgeQuest: (item: WorkspaceItem) => void; isLoading: boolean; }> = ({ item, onForgeQuest, isLoading }) => {
     if (!item.trendData) return null;
     const { novelty, velocity, impact, justification } = item.trendData;
 
@@ -50,33 +47,45 @@ const TrendCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
     };
 
     return (
-        <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-purple-700/50 rounded-lg p-5 shadow-lg shadow-purple-900/20">
-            <div className="flex items-start gap-4">
-                <div className="text-purple-400 mt-1"><SingularityIcon className="h-8 w-8" /></div>
-                <div className="flex-1">
-                    <h3 className="text-xl font-bold text-slate-100 mb-1">{item.title}</h3>
-                    <p className="text-slate-300 leading-relaxed mb-4">{item.summary}</p>
-                    
-                    <div className="flex justify-around gap-4 p-3 mb-4 bg-slate-900/50 rounded-lg">
-                        <div className="text-center">
-                            <div className="text-sm text-slate-400">Novelty</div>
-                            <div className={`text-2xl font-bold ${getScoreColor(novelty)}`}>{novelty}</div>
+        <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-purple-700/50 rounded-lg p-5 shadow-lg shadow-purple-900/20 flex flex-col">
+            <div className="flex-grow">
+                <div className="flex items-start gap-4">
+                    <div className="text-purple-400 mt-1"><SingularityIcon className="h-8 w-8" /></div>
+                    <div className="flex-1">
+                        <h3 className="text-xl font-bold text-slate-100 mb-1">{item.title}</h3>
+                        <p className="text-slate-300 leading-relaxed mb-4">{item.summary}</p>
+                        
+                        <div className="flex justify-around gap-4 p-3 mb-4 bg-slate-900/50 rounded-lg">
+                            <div className="text-center">
+                                <div className="text-sm text-slate-400">Novelty</div>
+                                <div className={`text-2xl font-bold ${getScoreColor(novelty)}`}>{novelty}</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-sm text-slate-400">Velocity</div>
+                                <div className={`text-2xl font-bold ${getScoreColor(velocity)}`}>{velocity}</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-sm text-slate-400">Impact</div>
+                                <div className={`text-2xl font-bold ${getScoreColor(impact)}`}>{impact}</div>
+                            </div>
                         </div>
-                        <div className="text-center">
-                            <div className="text-sm text-slate-400">Velocity</div>
-                            <div className={`text-2xl font-bold ${getScoreColor(velocity)}`}>{velocity}</div>
+                        
+                        <div className="mt-4 pt-4 border-t border-slate-700">
+                            <h4 className="font-semibold text-slate-300 mb-1">Justification:</h4>
+                            <p className="text-sm text-slate-400 italic">"{justification}"</p>
                         </div>
-                        <div className="text-center">
-                            <div className="text-sm text-slate-400">Impact</div>
-                            <div className={`text-2xl font-bold ${getScoreColor(impact)}`}>{impact}</div>
-                        </div>
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-slate-700">
-                        <h4 className="font-semibold text-slate-300 mb-1">Justification:</h4>
-                        <p className="text-sm text-slate-400 italic">"{justification}"</p>
                     </div>
                 </div>
+            </div>
+             <div className="mt-4 pt-4 border-t border-purple-800/50">
+                <button
+                    onClick={() => onForgeQuest(item)}
+                    disabled={item.questForged || isLoading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 text-base disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 text-slate-200 border border-slate-600 enabled:hover:bg-teal-600 enabled:hover:text-white enabled:hover:border-teal-500"
+                >
+                    <ForgeIcon />
+                    {item.questForged ? 'Quest Forged' : 'Forge Quest'}
+                </button>
             </div>
         </div>
     );
@@ -145,7 +154,7 @@ const AutonomousStatusIndicator: React.FC<{ isLoading: boolean }> = ({ isLoading
 );
 
 
-const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHistory, timeLapseIndex, onTimeLapseChange, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, trajectoryState, onApplyIntervention, loadingMessage, isAutonomousMode, isAutonomousLoading }) => {
+const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHistory, timeLapseIndex, onTimeLapseChange, isLoading, error, hasSearched, isSynthesizing, synthesisError, onSynthesize, onForgeQuest, trajectoryState, onApplyIntervention, loadingMessage, isAutonomousMode, isAutonomousLoading }) => {
   if (isLoading && !workspace) {
     return <LoadingSpinner message={loadingMessage} />;
   }
@@ -189,7 +198,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHisto
                 <h4 className="text-3xl font-bold text-slate-100 mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-fuchsia-400">Emerging Trends</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {trendItems.map((item) => (
-                        <TrendCard key={item.id} item={item} />
+                        <TrendCard key={item.id} item={item} onForgeQuest={onForgeQuest} isLoading={isLoading} />
                     ))}
                 </div>
             </div>

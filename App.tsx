@@ -1,17 +1,23 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource, Intervention, RealmDefinition } from './types';
+import { 
+    type ModelDefinition, type WorkspaceState, AgentType, TrajectoryState, OdysseyState, ToastMessage, 
+    Realm, ModelProvider, HuggingFaceDevice, AgentResponse, type GPUSupportedFeatures, SearchDataSource, 
+    Intervention, RealmDefinition, Quest, WorkspaceItem, RAGIndexEntry, RAGContext 
+} from './types';
 import { dispatchAgent, synthesizeFindings, callAscensionOracle } from './services/geminiService';
 import { getInitialTrajectory, applyIntervention } from './services/trajectoryService';
+import { buildRAGIndex, queryRAGIndex } from './services/ragService';
 import { 
-    SUPPORTED_MODELS, ACHIEVEMENTS, VECTOR_POINTS, REALM_DEFINITIONS, INTERVENTIONS, 
+    SUPPORTED_MODELS, ACHIEVEMENTS, REALM_DEFINITIONS, INTERVENTIONS, 
     DEFAULT_HUGGING_FACE_DEVICE, DEFAULT_HUGGING_FACE_QUANTIZATION, 
-    AUTONOMOUS_AGENT_QUERY, DEFAULT_AGENT_BUDGET
+    AUTONOMOUS_AGENT_QUERY, DEFAULT_AGENT_BUDGET, QUESTS
 } from './constants';
 import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
 import WorkspaceView from './components/ResultsDisplay';
 import { ToastContainer } from './components/Toast';
 import DebugLogView from './components/DebugLogView';
+import QuestLog from './components/QuestLog';
 
 const APP_STATE_STORAGE_KEY = 'agelessOdysseyState';
 
@@ -84,11 +90,11 @@ const App: React.FC = () => {
   const [synthesisError, setSynthesisError] = useState<string | null>(null);
 
   const [trajectoryState, setTrajectoryState] = useState<TrajectoryState | null>(null);
+  const [quests, setQuests] = useState<Quest[]>(QUESTS);
 
   const [apiKey, setApiKey] = useState<string>('');
   const [odysseyState, setOdysseyState] = useState<OdysseyState>(getInitialOdysseyState());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [exploredTopics, setExploredTopics] = useState<Set<string>>(new Set());
   const [gpuFeatures, setGpuFeatures] = useState<GPUSupportedFeatures | null>(null);
 
   // --- Ascension Oracle State ---
@@ -109,6 +115,7 @@ const App: React.FC = () => {
   const [autonomousRunCount, setAutonomousRunCount] = useState<number>(0);
   const autonomousTimerRef = useRef<number | null>(null);
 
+  const [ragIndex, setRagIndex] = useState<RAGIndexEntry[]>([]);
 
   const [debugLog, setDebugLog] = useState<string[]>([]);
     
@@ -179,7 +186,7 @@ const App: React.FC = () => {
             if (savedState.hasSearched) setHasSearched(savedState.hasSearched);
             if (savedState.trajectoryState) setTrajectoryState(savedState.trajectoryState);
             if (savedState.odysseyState) setOdysseyState(savedState.odysseyState);
-            if (savedState.exploredTopics) setExploredTopics(new Set(savedState.exploredTopics));
+            if (savedState.quests) setQuests(savedState.quests);
             if (savedState.dynamicRealmDefinitions) setDynamicRealmDefinitions(savedState.dynamicRealmDefinitions);
 
             // Load autonomous mode state
@@ -212,6 +219,7 @@ const App: React.FC = () => {
         addLog(`Failed to load state from localStorage: ${error}. Starting fresh session.`);
         localStorage.removeItem(APP_STATE_STORAGE_KEY);
         setTrajectoryState(getInitialTrajectory());
+        setQuests(QUESTS);
     }
   }, [addLog]);
 
@@ -226,7 +234,7 @@ const App: React.FC = () => {
         const stateToSave = {
             topic, model, quantization, device, searchSources,
             workspaceHistory, hasSearched, trajectoryState, odysseyState,
-            exploredTopics: Array.from(exploredTopics),
+            quests,
             isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp,
             dynamicRealmDefinitions,
         };
@@ -234,8 +242,28 @@ const App: React.FC = () => {
     } catch (error) {
         addLog(`Error saving state to localStorage: ${error}`);
     }
-  }, [topic, model, quantization, device, searchSources, workspaceHistory, hasSearched, trajectoryState, odysseyState, exploredTopics, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, dynamicRealmDefinitions]);
+  }, [topic, model, quantization, device, searchSources, workspaceHistory, hasSearched, trajectoryState, odysseyState, quests, isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, dynamicRealmDefinitions]);
 
+
+  // Effect to build the RAG index whenever history or quests change
+  useEffect(() => {
+    const buildIndex = async () => {
+        const completedQuests = quests.filter(q => q.status === 'completed');
+        const allItems = workspaceHistory.flatMap(w => w.items);
+        // Deduplicate items to ensure the RAG context isn't cluttered
+        const uniqueItems = Array.from(new Map(allItems.map(item => [item.id, item])).values());
+
+        if (uniqueItems.length === 0 && completedQuests.length === 0) {
+            setRagIndex([]);
+            return;
+        }
+
+        const newIndex = await buildRAGIndex(uniqueItems, completedQuests, addLog);
+        setRagIndex(newIndex);
+    };
+
+    buildIndex();
+  }, [workspaceHistory, quests, addLog]);
 
   const handleApiKeyChange = (key: string) => {
       setApiKey(key);
@@ -261,7 +289,7 @@ const App: React.FC = () => {
   };
 
   // --- Odyssey Logic ---
-  const updateAscensionState = useCallback((action: string, payload?: any) => {
+  const updateAscensionState = useCallback((action: 'QUEST_COMPLETED' | 'UNLOCK_ACHIEVEMENT' | 'UPDATE_LONGEVITY_SCORE', payload?: any) => {
     setOdysseyState(prevOdysseyState => {
         let newMemic = prevOdysseyState.vectors.memic;
         let newGenetic = prevOdysseyState.vectors.genetic;
@@ -270,60 +298,22 @@ const App: React.FC = () => {
         const newToasts: ToastMessage[] = [];
         
         switch(action) {
-            case 'DISPATCH_AGENT':
-                newMemic += VECTOR_POINTS.MEMIC.DISPATCH_AGENT;
+            case 'QUEST_COMPLETED':
+                if (payload?.reward) {
+                    newMemic += payload.reward.memic;
+                    newGenetic += payload.reward.genetic;
+                }
                 if (!newAchievements.FIRST_RESEARCH.unlocked) {
                     newAchievements.FIRST_RESEARCH.unlocked = true;
                     newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.FIRST_RESEARCH.name, icon: 'achievement' });
                 }
                 break;
-            case 'SYNTHESIZE':
-                const itemsSynthesized = payload?.itemCount || 0;
-                newMemic += itemsSynthesized * VECTOR_POINTS.MEMIC.SYNTHESIZE_PER_ITEM;
-                if (!newAchievements.SYNTHESIZER.unlocked) {
-                    newAchievements.SYNTHESIZER.unlocked = true;
-                    newToasts.push({ id: Date.now() + 2, title: 'Achievement Unlocked!', message: newAchievements.SYNTHESIZER.name, icon: 'achievement' });
-                }
+            case 'UNLOCK_ACHIEVEMENT':
+                 if (payload?.achievementId && newAchievements[payload.achievementId] && !newAchievements[payload.achievementId].unlocked) {
+                    newAchievements[payload.achievementId].unlocked = true;
+                    newToasts.push({ id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements[payload.achievementId].name, icon: 'achievement' });
+                 }
                 break;
-            case 'UPDATE_KNOWLEDGE_GRAPH':
-                const { nodesAdded = 0, edgesAdded = 0, totalNodes = 0 } = payload;
-                newMemic += (nodesAdded * VECTOR_POINTS.MEMIC.KNOWLEDGE_GRAPH_NODE) + (edgesAdded * VECTOR_POINTS.MEMIC.KNOWLEDGE_GRAPH_EDGE);
-                 if (totalNodes >= 5 && !newAchievements.KNOWLEDGE_ARCHITECT.unlocked) {
-                    newAchievements.KNOWLEDGE_ARCHITECT.unlocked = true;
-                    newToasts.push({ id: Date.now() + 3, title: 'Achievement Unlocked!', message: newAchievements.KNOWLEDGE_ARCHITECT.name, icon: 'achievement' });
-                }
-                break;
-            case 'DISCOVER_TREND':
-                if (payload.trendData) {
-                    const { novelty, velocity, impact } = payload.trendData;
-                    const trendScore = novelty + velocity + impact;
-                    newMemic += VECTOR_POINTS.MEMIC.DISCOVER_TREND_BASE + (trendScore * VECTOR_POINTS.MEMIC.TREND_SCORE_MULTIPLIER);
-                    
-                    if (!newAchievements.TREND_SPOTTER.unlocked) {
-                        newAchievements.TREND_SPOTTER.unlocked = true;
-                        newToasts.push({ id: Date.now() + 4, title: 'Achievement Unlocked!', message: newAchievements.TREND_SPOTTER.name, icon: 'achievement' });
-                    }
-                    if (velocity >= 80 && !newAchievements.EXPONENTIAL_THINKER.unlocked) {
-                        newAchievements.EXPONENTIAL_THINKER.unlocked = true;
-                        newToasts.push({ id: Date.now() + 5, title: 'Achievement Unlocked!', message: newAchievements.EXPONENTIAL_THINKER.name, icon: 'achievement' });
-                    }
-                }
-                break;
-            case 'APPLY_INTERVENTION': {
-                const intervention: (Intervention & { sophistication: number }) | undefined = payload?.intervention;
-                if (intervention) {
-                    newGenetic += VECTOR_POINTS.GENETIC.INTERVENTION_BASE * intervention.sophistication;
-                    if(intervention.type === 'radical' && !newAchievements.TRANSHUMANIST.unlocked) {
-                        newAchievements.TRANSHUMANIST.unlocked = true;
-                        newToasts.push({ id: Date.now() + 6, title: 'Achievement Unlocked!', message: newAchievements.TRANSHUMANIST.name, icon: 'achievement' });
-                    }
-                     if(!newAchievements.BIO_STRATEGIST.unlocked) {
-                        newAchievements.BIO_STRATEGIST.unlocked = true;
-                        newToasts.push({ id: Date.now() + 7, title: 'Achievement Unlocked!', message: newAchievements.BIO_STRATEGIST.name, icon: 'achievement' });
-                    }
-                }
-                break;
-            }
             case 'UPDATE_LONGEVITY_SCORE': {
                  const newLongevityScore = Math.max(0, (100 - payload.biologicalAge) * 10);
                  updatedOdysseyState.longevityScore = newLongevityScore;
@@ -373,6 +363,75 @@ const App: React.FC = () => {
         return updatedOdysseyState;
     });
   }, [dynamicRealmDefinitions, isOracleLoading, apiKey, model, addLog, workspaceHistory, timeLapseIndex, trajectoryState]);
+
+  const handleQuestCompletion = useCallback((quest: Quest) => {
+      addLog(`Quest Completed: ${quest.title}`);
+      // 1. Toast
+      setToasts(prev => [...prev, { id: Date.now(), title: "Quest Complete!", message: quest.title, icon: 'quest' }]);
+      
+      // 2. Update Odyssey vectors
+      updateAscensionState('QUEST_COMPLETED', { reward: quest.reward });
+
+      // 3. Unlock achievement
+      if (quest.unlocksAchievement) {
+        updateAscensionState('UNLOCK_ACHIEVEMENT', { achievementId: quest.unlocksAchievement });
+      }
+
+      // 4. Unlock intervention
+      if (quest.unlocksIntervention) {
+        setTrajectoryState(prev => {
+          if (!prev) return null;
+          addLog(`Unlocking intervention: ${quest.unlocksIntervention}`);
+          const newInterventions = prev.interventions.map(i => 
+            i.id === quest.unlocksIntervention ? { ...i, status: 'unlocked' as const } : i
+          );
+          return { ...prev, interventions: newInterventions };
+        });
+      }
+  }, [updateAscensionState]);
+
+  const updateQuestProgress = useCallback((topic: string, agentType: AgentType, response: AgentResponse) => {
+      setQuests(prevQuests => {
+          const newQuests = [...prevQuests];
+          let questCompleted = false;
+
+          newQuests.forEach((quest, index) => {
+              if (quest.status === 'available') {
+                  const { objective } = quest;
+                  const agentMatch = objective.agent === agentType;
+                  const topicMatch = objective.topicKeywords.every(kw => topic.toLowerCase().includes(kw.toLowerCase()));
+                  
+                  // For now, success is based on matching agent & topic, and getting a valid response.
+                  const responseSufficient = response.items.length > 0;
+
+                  if (agentMatch && topicMatch && responseSufficient) {
+                      newQuests[index] = { ...quest, status: 'completed' };
+                      questCompleted = true;
+                      handleQuestCompletion(newQuests[index]);
+                  }
+              }
+          });
+
+          return questCompleted ? newQuests : prevQuests;
+      });
+  }, [handleQuestCompletion]);
+
+    // Effect to update available quests based on current realm
+  useEffect(() => {
+    setQuests(prevQuests =>
+      prevQuests.map(quest => {
+        const realmIndex = dynamicRealmDefinitions.findIndex(r => r.realm === odysseyState.realm);
+        const questRealmIndex = dynamicRealmDefinitions.findIndex(r => r.realm === quest.realmRequirement);
+        
+        if (quest.status === 'locked' && realmIndex >= questRealmIndex) {
+          addLog(`Quest unlocked by realm progression: ${quest.title}`);
+          return { ...quest, status: 'available' };
+        }
+        return quest;
+      })
+    );
+  }, [odysseyState.realm, dynamicRealmDefinitions, addLog]);
+
   
   // Effect for Autonomous Agent - Refactored for correctness and responsiveness
   useEffect(() => {
@@ -424,11 +483,15 @@ const App: React.FC = () => {
         addLog(`[Autonomous] Triggering search for: "${AUTONOMOUS_AGENT_QUERY}"`);
         setIsAutonomousLoading(true);
         try {
-            const response = await dispatchAgent(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, device, searchSources);
+            const ragContext = await queryRAGIndex(AUTONOMOUS_AGENT_QUERY, ragIndex, addLog);
+            const response = await dispatchAgent(
+                AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, model, quantization, addLog, apiKey, 
+                device, searchSources, undefined, undefined, ragContext ?? undefined
+            );
             addLog(`[Autonomous] Agent finished. Found ${response.items.length} new items.`);
             
-            // On success, increment the counter for used budget. This happens even if no items are found.
             setAgentCallsMade(prev => prev + 1);
+            updateQuestProgress(AUTONOMOUS_AGENT_QUERY, AgentType.TrendSpotter, response);
 
             if (response.items.length > 0) {
                 setHasSearched(prev => prev ? prev : true);
@@ -438,20 +501,11 @@ const App: React.FC = () => {
                     setTimeLapseIndex(prevHistory.length);
                     return [...prevHistory, newWorkspace];
                 });
-
-                response.items.forEach(item => {
-                    if (item.type === 'trend' && item.trendData) {
-                        updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
-                    }
-                });
             }
         } catch (e) {
             const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
             addLog(`[Autonomous] ERROR during periodic search: ${errorMessage}`);
-            // Do not increment agentCallsMade on error.
         } finally {
-            // This state update triggers the effect to re-run and schedule the next call,
-            // regardless of whether the last call succeeded or failed.
             setAutonomousRunCount(prev => prev + 1);
             setIsAutonomousLoading(false);
         }
@@ -462,7 +516,7 @@ const App: React.FC = () => {
             clearTimeout(autonomousTimerRef.current);
         }
     };
-  }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, searchSources, addLog, updateAscensionState, autonomousRunCount]);
+  }, [isAutonomousMode, agentBudget, agentCallsMade, budgetResetTimestamp, model, quantization, apiKey, device, searchSources, addLog, updateQuestProgress, autonomousRunCount, ragIndex]);
 
   const handleTimeLapseChange = (index: number) => {
     setTimeLapseIndex(index);
@@ -485,21 +539,9 @@ const App: React.FC = () => {
     setLoadingMessage(`Dispatching ${agentType}...`);
     addLog(`Dispatching agent '${agentType}' for topic: "${topic}"`);
 
-    const isNewTopic = !exploredTopics.has(topic);
-    if (isNewTopic) {
-        setExploredTopics(prev => new Set(prev).add(topic));
-        if (Array.from(exploredTopics).length + 1 >= 3) {
-            setOdysseyState(prev => {
-                if (!prev.achievements.HALLMARK_EXPLORER.unlocked) {
-                    setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Hallmark Explorer", icon: 'achievement' }]);
-                    return {...prev, achievements: {...prev.achievements, HALLMARK_EXPLORER: {...prev.achievements.HALLMARK_EXPLORER, unlocked: true}}};
-                }
-                return prev;
-            })
-        }
-    }
-
     try {
+      const ragContext = await queryRAGIndex(topic, ragIndex, addLog);
+      
       const response = await dispatchAgent(
         topic,
         agentType,
@@ -509,27 +551,18 @@ const App: React.FC = () => {
         apiKey,
         device,
         searchSources,
-        (msg) => setLoadingMessage(msg)
+        (msg) => setLoadingMessage(msg),
+        undefined,
+        ragContext ?? undefined
       );
       
       addLog(`Agent '${agentType}' finished. Found ${response.items.length} items and ${response.sources?.length || 0} sources.`);
       
       const previousWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
       const newWorkspace = createNextWorkspaceState(topic, previousWorkspace, response);
-
-      // Memic point updates
-      updateAscensionState('DISPATCH_AGENT');
       
-      if (response.knowledgeGraph) {
-          const nodesAdded = newWorkspace.knowledgeGraph!.nodes.length - (previousWorkspace?.knowledgeGraph?.nodes.length || 0);
-          const edgesAdded = newWorkspace.knowledgeGraph!.edges.length - (previousWorkspace?.knowledgeGraph?.edges.length || 0);
-          updateAscensionState('UPDATE_KNOWLEDGE_GRAPH', { nodesAdded, edgesAdded, totalNodes: newWorkspace.knowledgeGraph!.nodes.length });
-      }
-      response.items.forEach(item => {
-        if (item.type === 'trend' && item.trendData) {
-            updateAscensionState('DISCOVER_TREND', { trendData: item.trendData });
-        }
-      });
+      // Check for quest completion
+      updateQuestProgress(topic, agentType, response);
       
       setWorkspaceHistory(prev => [...prev, newWorkspace]);
       setTimeLapseIndex(workspaceHistory.length);
@@ -543,7 +576,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [topic, model, quantization, apiKey, device, searchSources, addLog, workspaceHistory, exploredTopics, updateAscensionState]);
+  }, [topic, model, quantization, apiKey, device, searchSources, addLog, workspaceHistory, updateQuestProgress, ragIndex]);
   
   const handleSynthesize = useCallback(async () => {
     const currentWorkspace = workspaceHistory[timeLapseIndex];
@@ -562,8 +595,6 @@ const App: React.FC = () => {
             newHistory[timeLapseIndex] = { ...newHistory[timeLapseIndex], synthesis: synthesisText, timestamp: Date.now() };
             return newHistory;
         });
-
-        updateAscensionState('SYNTHESIZE', { itemCount: currentWorkspace.items.length });
         
         // After synthesis, if no trajectory state exists, initialize it.
         if (!trajectoryState) {
@@ -571,12 +602,6 @@ const App: React.FC = () => {
             setTrajectoryState(initialState);
             const biologicalAge = initialState.overallScore.projection[0].value;
             updateAscensionState('UPDATE_LONGEVITY_SCORE', { biologicalAge });
-             if (initialState.overallScore.projection[0].value <= 45 && !odysseyState.achievements.SCORE_MILESTONE_1.unlocked) { // This condition is based on Longevity Score > 550
-                setOdysseyState(prev => {
-                    setToasts(t => [...t, { id: Date.now(), title: "Achievement Unlocked!", message: "Longevity Adept", icon: 'achievement' }]);
-                    return {...prev, achievements: {...prev.achievements, SCORE_MILESTONE_1: {...prev.achievements.SCORE_MILESTONE_1, unlocked: true}}};
-                });
-             }
         }
 
     } catch(e) {
@@ -586,23 +611,82 @@ const App: React.FC = () => {
     } finally {
         setIsSynthesizing(false);
     }
-  }, [workspaceHistory, timeLapseIndex, model, quantization, apiKey, device, addLog, updateAscensionState, odysseyState.achievements, trajectoryState]);
+  }, [workspaceHistory, timeLapseIndex, model, quantization, apiKey, device, addLog, odysseyState.achievements, trajectoryState, updateAscensionState]);
 
   const handleApplyIntervention = (interventionId: string | null) => {
-    const newState = applyIntervention(interventionId);
+    if (!trajectoryState) return;
+    const newState = applyIntervention(trajectoryState, interventionId);
     setTrajectoryState(newState);
-    
-    // Odyssey update
-    const intervention = interventionId ? INTERVENTIONS.find(i => i.id === interventionId) : null;
-    if (intervention) {
-        updateAscensionState('APPLY_INTERVENTION', { intervention });
-    }
     
     const newBioAge = newState.overallScore.interventionProjection?.[0].value ?? newState.overallScore.projection[0].value;
     updateAscensionState('UPDATE_LONGEVITY_SCORE', { biologicalAge: newBioAge });
     
     addLog(`Applied intervention: ${interventionId || 'None'}`);
   };
+
+  const handleForgeQuest = useCallback(async (item: WorkspaceItem) => {
+    if (!item.trendData || item.questForged) return;
+
+    addLog(`[QuestCrafter] Forging quest from trend: "${item.title}"`);
+    setIsLoading(true);
+    setError(null);
+    setLoadingMessage(`Forging quest from trend...`);
+
+    try {
+      const ragContext = await queryRAGIndex(item.title, ragIndex, addLog);
+      
+      const response = await dispatchAgent(
+        item.title,
+        AgentType.QuestCrafter,
+        model,
+        quantization,
+        addLog,
+        apiKey,
+        device,
+        [], // No search needed for quest crafting
+        (msg) => setLoadingMessage(msg),
+        item.trendData,
+        ragContext ?? undefined
+      );
+
+      if (response.newQuest) {
+        const createdQuest: Quest = {
+          ...response.newQuest,
+          id: `dynamic-${Date.now()}`,
+          status: 'available',
+          isDynamic: true,
+          sourceTrendId: item.id,
+          realmRequirement: odysseyState.realm as Realm, // Assign to current realm
+        };
+        setQuests(prev => [...prev, createdQuest]);
+        setToasts(prev => [...prev, { id: Date.now(), title: 'New Quest Available!', message: `Forged from trend: ${item.title}`, icon: 'quest' }]);
+
+        // Mark the trend as having a quest forged
+        setWorkspaceHistory(prevHistory => {
+            const newHistory = JSON.parse(JSON.stringify(prevHistory));
+            const latestWorkspace = newHistory[newHistory.length-1];
+            const trendIndex = latestWorkspace.items.findIndex((i: WorkspaceItem) => i.id === item.id);
+            if (trendIndex !== -1) {
+                latestWorkspace.items[trendIndex].questForged = true;
+            }
+            return newHistory;
+        });
+
+        addLog(`[QuestCrafter] Successfully forged quest: "${createdQuest.title}"`);
+      } else {
+        throw new Error("Quest Crafter agent did not return a valid new quest object.");
+      }
+
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'An unknown error occurred.';
+      setError(message);
+      addLog(`[QuestCrafter] ERROR during quest forging: ${message}`);
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [model, quantization, addLog, apiKey, device, odysseyState.realm, ragIndex]);
+
 
   const handleResetProgress = () => {
     if (window.confirm("Are you sure you want to reset all progress? This will clear your workspace, trajectory, and achievements.")) {
@@ -615,7 +699,7 @@ const App: React.FC = () => {
         setSynthesisError(null);
         setTrajectoryState(getInitialTrajectory());
         setOdysseyState(getInitialOdysseyState());
-        setExploredTopics(new Set());
+        setQuests(QUESTS);
         setIsAutonomousMode(false);
         setAgentBudget(DEFAULT_AGENT_BUDGET);
         setAgentCallsMade(0);
@@ -634,6 +718,34 @@ const App: React.FC = () => {
   };
 
   const currentWorkspace = workspaceHistory[timeLapseIndex];
+  
+  const Dashboard = () => (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 items-start">
+        <div className="lg:col-span-1 lg:sticky lg:top-8">
+            <QuestLog quests={quests} />
+        </div>
+        <div className="lg:col-span-2">
+            <WorkspaceView
+              workspace={currentWorkspace}
+              workspaceHistory={workspaceHistory}
+              timeLapseIndex={timeLapseIndex}
+              onTimeLapseChange={handleTimeLapseChange}
+              isLoading={isLoading}
+              error={error}
+              hasSearched={hasSearched}
+              isSynthesizing={isSynthesizing}
+              synthesisError={synthesisError}
+              onSynthesize={handleSynthesize}
+              onForgeQuest={handleForgeQuest}
+              trajectoryState={trajectoryState}
+              onApplyIntervention={handleApplyIntervention}
+              loadingMessage={loadingMessage}
+              isAutonomousMode={isAutonomousMode}
+              isAutonomousLoading={isAutonomousLoading}
+            />
+        </div>
+      </div>
+  );
 
   return (
     <main className="min-h-screen text-slate-200">
@@ -661,23 +773,7 @@ const App: React.FC = () => {
           searchSources={searchSources}
           onToggleSearchSource={handleToggleSearchSource}
         />
-        <WorkspaceView
-          workspace={currentWorkspace}
-          workspaceHistory={workspaceHistory}
-          timeLapseIndex={timeLapseIndex}
-          onTimeLapseChange={handleTimeLapseChange}
-          isLoading={isLoading}
-          error={error}
-          hasSearched={hasSearched}
-          isSynthesizing={isSynthesizing}
-          synthesisError={synthesisError}
-          onSynthesize={handleSynthesize}
-          trajectoryState={trajectoryState}
-          onApplyIntervention={handleApplyIntervention}
-          loadingMessage={loadingMessage}
-          isAutonomousMode={isAutonomousMode}
-          isAutonomousLoading={isAutonomousLoading}
-        />
+        <Dashboard />
       </div>
       <ToastContainer 
         toasts={toasts}

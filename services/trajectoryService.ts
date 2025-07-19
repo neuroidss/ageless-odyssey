@@ -48,6 +48,12 @@ export const getInitialTrajectory = (): TrajectoryState => {
         return { ...def, history, projection, bypassed: false };
     });
 
+    const interventionsWithStatus = INTERVENTIONS.map(i => ({
+        ...i,
+        // Basic interventions start unlocked, others are locked.
+        status: i.id === 'cr' ? 'unlocked' : 'locked',
+    } as (Intervention & { sophistication: number })));
+
     // Calculate overall score (simplified as a biological age)
     const calculateBioAge = (yearOffset: number): number => {
       // This is a simplified model. A real one would be more complex.
@@ -68,7 +74,7 @@ export const getInitialTrajectory = (): TrajectoryState => {
     
     return {
         biomarkers,
-        interventions: INTERVENTIONS,
+        interventions: interventionsWithStatus,
         activeInterventionId: null,
         isRadicalInterventionActive: false,
         overallScore: {
@@ -78,14 +84,17 @@ export const getInitialTrajectory = (): TrajectoryState => {
     };
 };
 
-export const applyIntervention = (interventionId: string | null): TrajectoryState => {
-    const state = getInitialTrajectory(); // Start with the clean, non-radical state
+export const applyIntervention = (currentState: TrajectoryState, interventionId: string | null): TrajectoryState => {
+    // Re-calculate baseline from initial principles to ensure intervention effects don't stack improperly
+    const baselineState = getInitialTrajectory();
+    const state = { ...baselineState, interventions: currentState.interventions }; // Use current intervention statuses
+
     if (!interventionId) {
         return { ...state, activeInterventionId: null, isRadicalInterventionActive: false, biomarkers: state.biomarkers.map(b => ({...b, interventionProjection: undefined})), overallScore: {...state.overallScore, interventionProjection: undefined} };
     }
 
-    const intervention = INTERVENTIONS.find(i => i.id === interventionId);
-    if (!intervention) return state;
+    const intervention = state.interventions.find(i => i.id === interventionId);
+    if (!intervention || intervention.status === 'locked') return state;
     
     const baseValues = {
       telomere_length: { start: 7.5, change: -0.05, optimal: 10.0 },

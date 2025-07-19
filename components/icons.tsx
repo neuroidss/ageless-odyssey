@@ -18,8 +18,8 @@ export const BioDataIcon = () => (
     </svg>
 );
 
-export const LinkIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+export const LinkIcon = ({ className = "h-4 w-4 inline-block mr-1" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
     </svg>
 );
@@ -171,6 +171,21 @@ export const NetworkIcon = ({className = "h-8 w-8"}) => (
         <circle cx="15" cy="15" r="1.5" fill="currentColor"/>
     </svg>
 );
+
+export const QuestIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+export const ForgeIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path d="M15 12c0 1.657-1.343 3-3 3s-3-1.343-3-3c0-.199.02-.393.057-.581 1.474.542 2.927.542 4.402 0 .037.188.057.382.057.581z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m14.25 6-1.5 3h3l-1.5-3zM5 13.5a7.5 7.5 0 1 0 15 0 7.5 7.5 0 0 0-15 0zM5.25 15.375a6 6 0 1 0 11.5 0 6 6 0 0 0-11.5 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a2.25 2.25 0 0 1-2.25-2.25V15h4.5v3.75A2.25 2.25 0 0 1 12 21z" />
+    </svg>
+);
+
 
 // --- Realm Icons ---
 export const ShellIcon = ({className="h-6 w-6"}) => ( // Mortal Shell

@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice, type RealmDefinition } from './types';
+import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice, type RealmDefinition, Quest, AgentType } from './types';
 
 export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] = [
     { label: 'wasm', value: 'wasm' },
@@ -62,7 +62,7 @@ export const SUPPORTED_MODELS: ModelDefinition[] = [
 ];
 
 
-export const INTERVENTIONS: (Intervention & { sophistication: number })[] = [
+export const INTERVENTIONS: (Omit<Intervention, 'status'> & { sophistication: number })[] = [
     // Biological Interventions (For Biological Optimizer)
     { id: 'cr', name: 'Caloric Restriction', description: 'Reduces metabolic stress and nutrient-sensing pathways.', type: 'biological', sophistication: 1, effects: { mito_efficiency: 0.1, epigenetic_noise: 0.08, proteostasis: 0.05 } },
     { id: 'senolytics', name: 'Senolytics', description: 'Selectively clear senescent cells from tissues.', type: 'biological', sophistication: 2, effects: { senescent_cells: 0.3 } },
@@ -81,24 +81,6 @@ export const INTERVENTIONS: (Intervention & { sophistication: number })[] = [
 
 
 // --- Ascension Framework Constants ---
-
-export const VECTOR_POINTS = {
-    MEMIC: {
-        DISPATCH_AGENT: 2,
-        // Points per item synthesized
-        SYNTHESIZE_PER_ITEM: 5, 
-        // Points per node and edge in graph
-        KNOWLEDGE_GRAPH_NODE: 1,
-        KNOWLEDGE_GRAPH_EDGE: 2,
-        // Points for discovering a trend, plus multipliers
-        DISCOVER_TREND_BASE: 25,
-        TREND_SCORE_MULTIPLIER: 0.5, // multiplier for the sum of novelty, velocity, impact
-    },
-    GENETIC: {
-        // Points awarded based on the sophistication of an intervention
-        INTERVENTION_BASE: 10,
-    }
-};
 
 export const REALM_DEFINITIONS: RealmDefinition[] = [
     { 
@@ -175,14 +157,80 @@ export const REALM_DEFINITIONS: RealmDefinition[] = [
 
 
 export const ACHIEVEMENTS: Record<string, Omit<Achievement, 'unlocked'>> = {
-  FIRST_RESEARCH: { id: 'FIRST_RESEARCH', name: 'Budding Scientist', description: 'Dispatch your first AI agent to begin your research.', xp: 50 },
-  TREND_SPOTTER: { id: 'TREND_SPOTTER', name: 'Trend Spotter', description: 'Discover your first high-potential trend.', xp: 150 },
-  EXPONENTIAL_THINKER: { id: 'EXPONENTIAL_THINKER', name: 'Exponential Thinker', description: 'Discover a trend with a velocity score of 80 or higher.', xp: 250 },
-  KNOWLEDGE_ARCHITECT: { id: 'KNOWLEDGE_ARCHITECT', name: 'Knowledge Architect', description: 'Build a knowledge graph with 5 or more nodes.', xp: 100 },
-  SYNTHESIZER: { id: 'SYNTHESIZER', name: 'The Synthesizer', description: 'Generate your first AI synthesis to connect the dots.', xp: 75 },
-  BIO_STRATEGIST: { id: 'BIO_STRATEGIST', name: 'Bio-Strategist', description: 'Simulate your first intervention to see the future.', xp: 75 },
-  TRANSHUMANIST: { id: 'TRANSHUMANIST', name: 'Transhumanist', description: 'Simulate a radical intervention, embracing a post-biological future.', xp: 250 },
-  HALLMARK_EXPLORER: { id: 'HALLMARK_EXPLORER', name: 'Hallmark Explorer', description: 'Research 3 different hallmarks of aging.', xp: 100 },
-  SCORE_MILESTONE_1: { id: 'SCORE_MILESTONE_1', name: 'Longevity Adept', description: 'Achieve a Longevity Score of 550 or more.', xp: 150 },
+  FIRST_RESEARCH: { id: 'FIRST_RESEARCH', name: 'First Steps', description: 'Complete your first research quest.', xp: 50 },
+  BIO_STRATEGIST: { id: 'BIO_STRATEGIST', name: 'Bio-Strategist', description: 'Unlock your first biological intervention through research.', xp: 150 },
+  EXPONENTIAL_THINKER: { id: 'EXPONENTIAL_THINKER', name: 'Exponential Thinker', description: 'Discover a high-velocity trend by spotting emerging patterns.', xp: 250 },
+  KNOWLEDGE_ARCHITECT: { id: 'KNOWLEDGE_ARCHITECT', name: 'Knowledge Architect', description: 'Complete a quest that builds out the Knowledge Graph.', xp: 100 },
+  TRANSHUMANIST: { id: 'TRANSHUMANIST', name: 'Transhumanist', description: 'Unlock a radical intervention, embracing a post-biological future.', xp: 500 },
   REALM_ASCENSION: { id: 'REALM_ASCENSION', name: 'Ascendant', description: 'Reach the Realm of the Biological Optimizer.', xp: 200 },
 };
+
+export const QUESTS: Quest[] = [
+    {
+        id: 'Q01_TRENDS',
+        title: 'Scan the Horizon',
+        description: 'The first step is to understand the landscape. Use the Singularity Detector to identify emerging trends in the broader field of longevity.',
+        objective: { agent: AgentType.TrendSpotter, topicKeywords: ['longevity', 'rejuvenation', 'anti-aging'] },
+        reward: { xp: 100, memic: 150, genetic: 0 },
+        citations: [
+            { title: "The Hallmarks of Aging (López-Otín et al., 2013)", url: "https://www.cell.com/cell/fulltext/S0092-8674(13)00645-4" }
+        ],
+        unlocksAchievement: 'EXPONENTIAL_THINKER',
+        realmRequirement: Realm.MortalShell,
+        status: 'available',
+    },
+    {
+        id: 'Q02_SENOLYTICS',
+        title: 'Validate Senolytics',
+        description: "Cellular senescence is a key hallmark of aging. Investigate the primary senolytic compounds to see if they represent a viable intervention strategy.",
+        objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['senolytics', 'dasatinib', 'quercetin'] },
+        reward: { xp: 150, memic: 200, genetic: 50 },
+        citations: [
+            { title: "The Clinical Potential of Senolytics (Kirkland & Tchkonia, 2020)", url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400228/" }
+        ],
+        unlocksAchievement: 'BIO_STRATEGIST',
+        unlocksIntervention: 'senolytics',
+        realmRequirement: Realm.MortalShell,
+        status: 'available',
+    },
+    {
+        id: 'Q03_NAD',
+        title: 'Investigate NAD+ Decline',
+        description: "NAD+ is a critical coenzyme, and its decline is linked to aging. Research the efficacy of its precursors as a restorative therapy.",
+        objective: { agent: AgentType.KnowledgeNavigator, topicKeywords: ['NAD+', 'precursors', 'NMN', 'NR'] },
+        reward: { xp: 150, memic: 200, genetic: 50 },
+        citations: [
+            { title: "The NAD+ precursor nicotinamide riboside enhances oxidative metabolism (Cantó et al., 2012)", url: "https://www.cell.com/cell-metabolism/fulltext/S1550-4131(12)00192-1" }
+        ],
+        unlocksIntervention: 'nad_precursors',
+        realmRequirement: Realm.MortalShell,
+        status: 'available',
+    },
+    {
+        id: 'Q04_FOXO3',
+        title: 'The FOXO3 Gene',
+        description: "The FOXO3 gene is strongly correlated with exceptional human longevity. Use the Gene Analyst to extract its properties and understand its function.",
+        objective: { agent: AgentType.GeneAnalyst, topicKeywords: ['FOXO3', 'longevity'] },
+        reward: { xp: 200, memic: 250, genetic: 75 },
+        citations: [
+            { title: "FOXO3A genotype is strongly associated with human longevity (Willcox et al., 2008)", url: "https://www.pnas.org/doi/10.1073/pnas.0801030105" }
+        ],
+        unlocksAchievement: 'KNOWLEDGE_ARCHITECT',
+        realmRequirement: Realm.BiologicalOptimizer,
+        status: 'locked',
+    },
+     {
+        id: 'Q05_NEURAL_INTERFACE',
+        title: 'The Substrate Bridge',
+        description: "The limits of biology are becoming apparent. Investigate the frontier of brain-computer interfaces, the first step towards a non-biological existence.",
+        objective: { agent: AgentType.TrendSpotter, topicKeywords: ['brain-computer interface', 'neural lace', 'exocortex'] },
+        reward: { xp: 500, memic: 1000, genetic: 250 },
+        citations: [
+            { title: "High-performance brain-to-text communication via imagined handwriting (Willett et al., 2021)", url: "https://www.nature.com/articles/s41586-021-03506-2" }
+        ],
+        unlocksAchievement: 'TRANSHUMANIST',
+        unlocksIntervention: 'neuro_interface',
+        realmRequirement: Realm.SubstrateEnhanced,
+        status: 'locked',
+    },
+];

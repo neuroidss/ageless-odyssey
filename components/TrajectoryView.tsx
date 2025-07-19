@@ -3,7 +3,6 @@ import React from 'react';
 import { type TrajectoryState, type Biomarker, Intervention } from '../types';
 import LineChart from './LineChart';
 import { TrajectoryIcon, TrendingUpIcon, TrendingDownIcon } from './icons';
-import { INTERVENTIONS } from '../constants';
 
 interface TrajectoryViewProps {
     trajectoryState: TrajectoryState;
@@ -51,12 +50,13 @@ const BiomarkerCard: React.FC<{ biomarker: Biomarker }> = ({ biomarker }) => {
 
 
 const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onApplyIntervention }) => {
-    const { biomarkers, activeInterventionId, overallScore, isRadicalInterventionActive } = trajectoryState;
+    const { biomarkers, interventions, activeInterventionId, overallScore, isRadicalInterventionActive } = trajectoryState;
     const currentScore = (isRadicalInterventionActive && overallScore.interventionProjection) ? overallScore.interventionProjection[0].value : overallScore.projection[0].value;
 
-    const biologicalInterventions = INTERVENTIONS.filter(i => i.type === 'biological');
-    const environmentalInterventions = INTERVENTIONS.filter(i => i.type === 'environmental');
-    const radicalInterventions = INTERVENTIONS.filter(i => i.type === 'radical');
+    const unlockedInterventions = interventions.filter(i => i.status === 'unlocked');
+    const biologicalInterventions = unlockedInterventions.filter(i => i.type === 'biological');
+    const environmentalInterventions = unlockedInterventions.filter(i => i.type === 'environmental');
+    const radicalInterventions = unlockedInterventions.filter(i => i.type === 'radical');
 
     return (
         <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
@@ -67,7 +67,7 @@ const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onAppl
                 </h2>
             </div>
             <p className="text-slate-400 text-center sm:text-left mb-6">
-                This is a simulation of your key biomarkers and biological age. Select an intervention to see its potential impact on your future.
+                This is a simulation of your key biomarkers and biological age. Select an intervention to see its potential impact on your future. Unlock more interventions by completing research quests.
             </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -88,21 +88,22 @@ const TrajectoryView: React.FC<TrajectoryViewProps> = ({ trajectoryState, onAppl
                                 className="w-full md:w-auto bg-slate-700 text-slate-200 font-semibold pl-3 pr-8 py-2 rounded-lg hover:bg-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all duration-300 border border-slate-600"
                             >
                                 <option value="">None (Baseline)</option>
-                                <optgroup label="Biological Interventions">
+                                 {unlockedInterventions.length === 0 && <option disabled>No interventions unlocked</option>}
+                                {biologicalInterventions.length > 0 && <optgroup label="Biological Interventions">
                                     {biologicalInterventions.map(i => (
                                         <option key={i.id} value={i.id}>{i.name}</option>
                                     ))}
-                                </optgroup>
-                                <optgroup label="Environmental Adaptations">
+                                </optgroup>}
+                                {environmentalInterventions.length > 0 && <optgroup label="Environmental Adaptations">
                                     {environmentalInterventions.map(i => (
                                         <option key={i.id} value={i.id}>{i.name}</option>
                                     ))}
-                                </optgroup>
-                                <optgroup label="Radical Interventions">
+                                </optgroup>}
+                                {radicalInterventions.length > 0 && <optgroup label="Radical Interventions">
                                      {radicalInterventions.map(i => (
                                         <option key={i.id} value={i.id}>{i.name}</option>
                                     ))}
-                                </optgroup>
+                                </optgroup>}
                             </select>
                         </div>
                     </div>
