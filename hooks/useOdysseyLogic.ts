@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { 
     type OdysseyState, type Quest, type TrajectoryState, type ToastMessage, type RealmDefinition, 
@@ -30,7 +31,7 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
     const [quests, setQuests] = useState<Quest[]>(QUESTS);
     const [trajectoryState, setTrajectoryState] = useState<TrajectoryState | null>(null);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
-    const [dynamicRealmDefinitions, setDynamicRealmDefinitions] = useState<RealmDefinition[]>([...REALM_DEFINITIONS].reverse());
+    const [dynamicRealmDefinitions, setDynamicRealmDefinitions] = useState<RealmDefinition[]>([...REALM_DEFINITIONS]);
     const [isOracleLoading, setIsOracleLoading] = useState<boolean>(false);
 
     // Load state from storage on mount

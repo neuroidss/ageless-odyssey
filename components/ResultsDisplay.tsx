@@ -1,9 +1,10 @@
 import React from 'react';
 import { type WorkspaceState, type WorkspaceItem, TrajectoryState } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon, NetworkIcon, ForgeIcon } from './icons';
+import { LinkIcon, LightbulbIcon, GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, ArticleIcon, PatentIcon, SingularityIcon, NetworkIcon, ForgeIcon, ClockHistoryIcon } from './icons';
 import TrajectoryView from './TrajectoryView';
 import KnowledgeGraphView from './KnowledgeGraphView';
+import TemporalLobeView from './TemporalLobeView';
 
 interface WorkspaceViewProps {
   workspace: WorkspaceState | undefined;
@@ -240,6 +241,26 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHisto
                 onApplyIntervention={onApplyIntervention}
               />
           )}
+
+           {/* Temporal Lobe Analysis Section */}
+            {workspaceHistory.length > 1 && (
+                <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
+                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-4">
+                        <ClockHistoryIcon className="h-8 w-8 text-cyan-300" />
+                        <h2 className="text-2xl font-bold text-slate-100 text-center sm:text-left">
+                            Temporal Analysis Lobe
+                        </h2>
+                    </div>
+                    <p className="text-slate-400 text-center sm:text-left mb-4">
+                        Analyze the evolution of the research landscape. Compare two snapshots in time to identify new discoveries and shifts in the information space, revealing the velocity of a trend.
+                    </p>
+                    <TemporalLobeView
+                        workspaceHistory={workspaceHistory}
+                        currentTimeIndex={timeLapseIndex}
+                        onTimeLapseChange={onTimeLapseChange}
+                    />
+                </div>
+            )}
           
           {/* Interactive Knowledge Graph Section */}
           {workspace.knowledgeGraph && workspace.knowledgeGraph.nodes.length > 0 && (
@@ -251,10 +272,10 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHisto
                     </h2>
                 </div>
                 <p className="text-slate-400 text-center sm:text-left mb-2">
-                    This interactive graph visualizes the conceptual relationships in your workspace, representing an embedding of the topic. Drag nodes to explore the network.
+                    This is your dynamic map of longevity science. As you and your agents explore, this graph will evolve into a new, comprehensive <strong>Systemic Schema of Aging</strong>, guiding the discovery of future trends.
                 </p>
                 <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-4">
-                    <label htmlFor="time-lapse-slider" className="text-sm text-slate-400 self-center">Time-Lapse:</label>
+                    <label htmlFor="time-lapse-slider" className="text-sm text-slate-400 self-center">Temporal Snapshot:</label>
                     <input
                         type="range"
                         id="time-lapse-slider"
@@ -264,7 +285,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, workspaceHisto
                         onChange={(e) => onTimeLapseChange(parseInt(e.target.value, 10))}
                         disabled={workspaceHistory.length <= 1}
                         className="w-48 self-center"
-                        aria-label="Time-Lapse Slider"
+                        aria-label="Temporal Snapshot Slider"
                     />
                     <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded-md self-center min-w-[170px] text-center">
                         {workspaceHistory.length > 0 ? snapshotTimestamp : 'No snapshots yet'}

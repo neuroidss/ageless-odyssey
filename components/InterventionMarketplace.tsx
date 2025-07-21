@@ -299,17 +299,25 @@ export const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = (
             </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 {MARKETPLACE_INTERVENTIONS.map(item => (
-                    <InterventionCard 
-                        key={item.id} 
-                        item={item} 
-                        odysseyState={odysseyState} 
-                        onDispatchAgent={onDispatchAgent}
-                        dispatchingStageId={dispatchingStageId}
-                        onAddToCart={onAddToCart}
-                        onAddToPortfolio={onAddToPortfolio}
-                    />
-                ))}
+                 {MARKETPLACE_INTERVENTIONS.length > 0 ? (
+                    MARKETPLACE_INTERVENTIONS.map(item => (
+                        <InterventionCard 
+                            key={item.id} 
+                            item={item} 
+                            odysseyState={odysseyState} 
+                            onDispatchAgent={onDispatchAgent}
+                            dispatchingStageId={dispatchingStageId}
+                            onAddToCart={onAddToCart}
+                            onAddToPortfolio={onAddToPortfolio}
+                        />
+                    ))
+                 ) : (
+                    <div className="col-span-1 lg:col-span-2 text-center py-8 text-slate-500">
+                        No interventions currently on the market.
+                        <br />
+                        Fund R&D to discover and develop new therapies.
+                    </div>
+                 )}
             </div>
         </div>
     );

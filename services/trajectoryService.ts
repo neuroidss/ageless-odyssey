@@ -2,7 +2,7 @@ import { type TrajectoryState, type Intervention, type Biomarker, type Trajector
 import { INTERVENTIONS } from '../constants';
 
 const CURRENT_YEAR = new Date().getFullYear();
-const CURRENT_AGE = 40; // Simulated user age
+const CURRENT_AGE = 100; // Simulated user age
 
 const BIOMARKER_DEFS: Omit<Biomarker, 'history' | 'projection'>[] = [
     { id: 'telomere_length', name: 'Telomere Length', description: 'Average length of protective caps on chromosomes.', unit: 'kbp', trendDirection: 'up' },
@@ -57,7 +57,7 @@ export const getInitialTrajectory = (): TrajectoryState => {
     // Calculate overall score (simplified as a biological age)
     const calculateBioAge = (yearOffset: number): number => {
       // This is a simplified model. A real one would be more complex.
-      // Starts at 40 (chrono age) and increases based on biomarker degradation.
+      // Starts at 100 (chrono age) and increases based on biomarker degradation.
       let age = CURRENT_AGE + yearOffset;
       let deviation = 0;
       biomarkers.forEach(b => {

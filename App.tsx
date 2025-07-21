@@ -15,6 +15,7 @@ import { InterventionMarketplace } from './components/InterventionMarketplace';
 import { AgentType, MarketplaceIntervention, RAndDStage } from './types';
 import { MARKETPLACE_INTERVENTIONS } from './constants';
 import PortfolioView from './components/PortfolioView';
+import AgingSchemeView from './components/AgingSchemeView';
 
 const APP_STATE_STORAGE_KEY = 'agelessOdysseyState';
 
@@ -167,7 +168,11 @@ const App: React.FC = () => {
     return (
         <main className="min-h-screen text-slate-200">
             <div className="container mx-auto px-4 py-8">
-                <Header odysseyState={odysseyState} dynamicRealmDefinitions={dynamicRealmDefinitions} isOracleLoading={isOracleLoading} />
+                <Header 
+                    odysseyState={odysseyState} 
+                    dynamicRealmDefinitions={dynamicRealmDefinitions} 
+                    isOracleLoading={isOracleLoading}
+                />
                 <AgentControlPanel
                     topic={topic}
                     setTopic={setTopic}

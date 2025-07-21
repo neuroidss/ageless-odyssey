@@ -1,6 +1,7 @@
 import React from 'react';
 import { OdysseyState, RealmDefinition } from '../types';
 import OdysseyMap from './GamificationDashboard';
+import { NetworkIcon } from './icons';
 
 interface HeaderProps {
     odysseyState: OdysseyState;
@@ -16,7 +17,7 @@ const Header: React.FC<HeaderProps> = ({ odysseyState, dynamicRealmDefinitions, 
                 The Ageless Odyssey
             </h1>
             <p className="mt-4 text-lg text-slate-400 max-w-3xl mx-auto">
-                Your journey is twofold: achieve complete engineering mastery over your own substrate and guide an AI Oracle toward cosmic understanding. Every quest you complete, every system you model, serves as a benchmark—not just for the AI, but for your ability to steer the course of evolution itself. Evolve from your mortal shell and rewrite your destiny.
+                Longevity research is a "chicken-and-egg" problem with a low signal-to-noise ratio. This is an engineering simulator to solve it. Your goal: use AI agents to find high-impact research trends, fund them, and guide your evolution from a fragile mortal shell to a post-biological entity.
             </p>
         </div>
         <OdysseyMap odysseyState={odysseyState} dynamicRealmDefinitions={dynamicRealmDefinitions} isOracleLoading={isOracleLoading} />
