@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
     type OdysseyState, type Quest, type TrajectoryState, type ToastMessage, type RealmDefinition, 
-    type ModelDefinition, Realm, WorkspaceState, MarketplaceIntervention, RAndDStage
+    type ModelDefinition, Realm, WorkspaceState, MarketplaceIntervention, RAndDStage, CartItem, InvestmentItem
 } from '../types';
 import { getInitialTrajectory, applyIntervention } from '../services/trajectoryService';
 import { callAscensionOracle } from '../services/geminiService';
-import { ACHIEVEMENTS, QUESTS, REALM_DEFINITIONS, MARKETPLACE_INTERVENTIONS, SUPPORTED_MODELS } from '../constants';
+import { ACHIEVEMENTS, QUESTS, REALM_DEFINITIONS, SUPPORTED_MODELS } from '../constants';
 
 const getInitialOdysseyState = (): OdysseyState => {
   const achievements = Object.entries(ACHIEVEMENTS).reduce((acc, [key, value]) => {
@@ -15,11 +15,13 @@ const getInitialOdysseyState = (): OdysseyState => {
   
   return {
     realm: Realm.MortalShell,
-    vectors: { genetic: 0, memic: 0, cognitive: 0 },
+    vectors: { genetic: 0, memic: 0, cognitive: 0, capital: 10_000_000 },
     benchmarkScore: 0,
     longevityScore: 0,
     achievements,
     completedStages: {},
+    rejuvenationCart: [],
+    investmentPortfolio: [],
   };
 };
 
@@ -103,7 +105,7 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
             }
             
             const newCognitive = Math.round(updatedOdysseyState.longevityScore * (1 + Math.log1p(newMemic)));
-            updatedOdysseyState.vectors = { genetic: newGenetic, memic: newMemic, cognitive: newCognitive };
+            updatedOdysseyState.vectors = { ...prevOdysseyState.vectors, genetic: newGenetic, memic: newMemic, cognitive: newCognitive };
             updatedOdysseyState.achievements = newAchievements;
             updatedOdysseyState.benchmarkScore = newBenchmarkScore;
 
@@ -200,6 +202,69 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
         updateAscensionState('STAGE_COMPLETED', { stage });
 
     }, [addLog, updateAscensionState]);
+    
+    const handleAddToCart = (intervention: MarketplaceIntervention) => {
+        if (!intervention.finalProduct) return;
+        setOdysseyState(prev => {
+            if (prev.rejuvenationCart.some(i => i.interventionId === intervention.id)) {
+                setToasts(t => [...t, { id: Date.now(), title: 'Already in Plan', message: `${intervention.name} is already in your rejuvenation plan.`, icon: 'error' }]);
+                return prev;
+            }
+            const cartItem: CartItem = {
+                interventionId: intervention.id,
+                name: intervention.name,
+                price: intervention.finalProduct.priceUSD,
+            };
+            setToasts(t => [...t, { id: Date.now(), title: 'Plan Updated', message: `${intervention.name} added.`, icon: 'success' }]);
+            return { ...prev, rejuvenationCart: [...prev.rejuvenationCart, cartItem] };
+        });
+    };
+
+    const handleAddToPortfolio = (intervention: MarketplaceIntervention, stage: RAndDStage, amount: number) => {
+        setOdysseyState(prev => {
+            const investmentItem: InvestmentItem = {
+                interventionId: intervention.id,
+                name: intervention.name,
+                stageName: stage.name,
+                amount,
+            };
+            
+            const newPortfolio = [...prev.investmentPortfolio, investmentItem];
+            
+            setToasts(t => [...t, { id: Date.now(), title: 'Portfolio Updated', message: `Added $${amount.toLocaleString()} to ${intervention.name}.`, icon: 'investment' }]);
+            return { ...prev, investmentPortfolio: newPortfolio };
+        });
+    };
+
+    const handleExecutePlan = () => {
+        setOdysseyState(prev => {
+            const totalCost = prev.rejuvenationCart.reduce((sum, item) => sum + item.price, 0);
+            if (prev.vectors.capital < totalCost) {
+                setToasts(t => [...t, { id: Date.now(), title: 'Execution Failed', message: 'Insufficient Capital.', icon: 'error' }]);
+                return prev;
+            }
+            const newCapital = prev.vectors.capital - totalCost;
+            const geneticBoost = prev.rejuvenationCart.length * 100;
+            const newGenetic = prev.vectors.genetic + geneticBoost;
+            setToasts(t => [...t, { id: Date.now(), title: 'Plan Executed!', message: `Capital spent: $${totalCost.toLocaleString()}.`, icon: 'purchase' }]);
+            return { ...prev, vectors: {...prev.vectors, capital: newCapital, genetic: newGenetic }, rejuvenationCart: [] };
+        });
+    };
+
+    const handleFinalizeInvestments = () => {
+        setOdysseyState(prev => {
+            const totalInvestment = prev.investmentPortfolio.reduce((sum, item) => sum + item.amount, 0);
+            if (prev.vectors.capital < totalInvestment) {
+                 setToasts(t => [...t, { id: Date.now(), title: 'Investment Failed', message: 'Insufficient Capital.', icon: 'error' }]);
+                return prev;
+            }
+            const newCapital = prev.vectors.capital - totalInvestment;
+            const memicBoost = Math.round(totalInvestment / 5000); // Gain knowledge from investing
+            const newMemic = prev.vectors.memic + memicBoost;
+            setToasts(t => [...t, { id: Date.now(), title: 'Investments Finalized!', message: `Capital invested: $${totalInvestment.toLocaleString()}.`, icon: 'investment' }]);
+            return { ...prev, vectors: {...prev.vectors, capital: newCapital, memic: newMemic }, investmentPortfolio: [] };
+        });
+    };
 
 
     // Effect to update available quests based on current realm
@@ -234,5 +299,9 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
         handleQuestCompletion,
         updateAscensionState,
         handleStageCompletion,
+        handleAddToCart,
+        handleAddToPortfolio,
+        handleExecutePlan,
+        handleFinalizeInvestments
     };
 };

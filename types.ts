@@ -41,7 +41,8 @@ export type HuggingFaceDevice = 'wasm' | 'webgpu';
 
 export enum SearchDataSource {
   PubMed = "PubMed",
-  BioRxiv = "bioRxiv",
+  BioRxivSearch = "bioRxiv (Search)",
+  BioRxivFeed = "bioRxiv (Live Feed)",
   GooglePatents = "Google Patents",
   WebSearch = "Web Search",
   OpenGenes = "OpenGenes",
@@ -249,7 +250,7 @@ export interface MarketplaceIntervention {
     id: string;
     name: string;
     description: string;
-    type: 'diagnostic' | 'supplement' | 'therapy' | 'consultation' | 'theoretical';
+    type: 'diagnostic' | 'supplement' | 'therapy' | 'theoretical';
     
     evidence: Evidence[];
 
@@ -265,6 +266,21 @@ export interface MarketplaceIntervention {
     };
 }
 
+// --- Investment & Portfolio Types ---
+export interface CartItem {
+    interventionId: string;
+    name: string;
+    price: number;
+}
+
+export interface InvestmentItem {
+    interventionId: string;
+    name: string;
+    stageName: string;
+    amount: number;
+}
+// --- End Investment Types ---
+
 
 export interface OdysseyState {
   realm: string; // Changed to string to allow dynamic, AI-generated realms
@@ -272,11 +288,14 @@ export interface OdysseyState {
     genetic: number;  // Represents biological integrity, improved by interventions
     memic: number;    // Represents knowledge contribution, improved by research
     cognitive: number;// Represents consciousness health, tied to longevity score
+    capital: number;  // Represents financial resources for investment
   };
   benchmarkScore: number; // Represents the system's clarity and understanding
   longevityScore: number; // The core metric driving the cognitive vector
   achievements: Record<string, Achievement>;
   completedStages: Record<string, string[]>; // interventionId -> array of completed stageIds
+  rejuvenationCart: CartItem[];
+  investmentPortfolio: InvestmentItem[];
 }
 
 export interface ToastMessage {

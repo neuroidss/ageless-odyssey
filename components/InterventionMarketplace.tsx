@@ -1,17 +1,19 @@
 import React, { useState, useRef } from 'react';
-import { MarketplaceIntervention, RAndDStage, AgentType, OdysseyState, Evidence, HypeCyclePhase } from '../types';
+import { MarketplaceIntervention, RAndDStage, AgentType, OdysseyState, Evidence, HypeCyclePhase, CartItem, InvestmentItem } from '../types';
 import { MARKETPLACE_INTERVENTIONS } from '../constants';
 import { 
     CartIcon, MemicIcon, PillIcon, TherapyIcon, PresentationChartLineIcon, 
     LinkIcon, BeakerIcon, UserGroupIcon, DocumentTextIcon, ChevronDownIcon,
     MicroscopeIcon, WrenchScrewdriverIcon, LightbulbIcon, ClipboardDocumentCheckIcon, AgentIcon,
-    GeneAnalystIcon, CompoundAnalystIcon, SingularityIcon, GeneticIcon, SystemClarityIcon
+    GeneAnalystIcon, CompoundAnalystIcon, SingularityIcon, GeneticIcon, SystemClarityIcon, BanknotesIcon, CheckCircleIcon
 } from './icons';
 
 interface InterventionMarketplaceProps {
     odysseyState: OdysseyState;
     onDispatchAgent: (interventionId: string, stageId: string) => void;
     dispatchingStageId: string | null;
+    onAddToCart: (intervention: MarketplaceIntervention) => void;
+    onAddToPortfolio: (intervention: MarketplaceIntervention, stage: RAndDStage, amount: number) => void;
 }
 
 const InterventionTypeIcon: React.FC<{ type: MarketplaceIntervention['type'], className?: string }> = ({ type, className = "h-8 w-8" }) => {
@@ -19,18 +21,8 @@ const InterventionTypeIcon: React.FC<{ type: MarketplaceIntervention['type'], cl
         case 'supplement': return <PillIcon className={className} />;
         case 'therapy': return <TherapyIcon className={className} />;
         case 'diagnostic': return <PresentationChartLineIcon className={className} />;
-        case 'consultation': return <LightbulbIcon className={className} />;
         case 'theoretical': return <BeakerIcon className={`${className} text-purple-400`} />;
         default: return <PillIcon className={className} />;
-    }
-};
-
-const StageStatusIcon: React.FC<{ status: 'Completed' | 'Blocked' | 'In Progress', className?: string }> = ({ status, className = 'h-5 w-5'}) => {
-    switch(status) {
-        case 'Completed': return <ClipboardDocumentCheckIcon className={`${className} text-green-400`} />;
-        case 'Blocked': return <div className="w-3 h-3 rounded-full bg-slate-600 border-2 border-slate-500 mt-1"></div>;
-        case 'In Progress': return <div className="w-4 h-4 rounded-full border-2 border-dashed border-blue-400 animate-spin mt-1"></div>;
-        default: return null;
     }
 };
 
@@ -104,58 +96,66 @@ const HypeCycleDisplay: React.FC<{ level: number }> = ({ level }) => {
     );
 };
 
-const RewardPill: React.FC<{ icon: React.ReactNode, value: number, colorClass: string }> = ({ icon, value, colorClass }) => (
-    <div className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full ${colorClass}`}>
-      {icon}
-      <span>{value.toLocaleString()}</span>
-    </div>
-);
 
 const StagePill: React.FC<{
     stage: RAndDStage;
-    status: 'Completed' | 'Blocked' | 'In Progress';
-    onDispatch: () => void;
-    canAfford: boolean;
-    isLoading: boolean;
-}> = ({ stage, status, onDispatch, canAfford, isLoading }) => {
-    const isNext = status === 'In Progress';
-    
+    onFund: () => void;
+    onInvest: (amount: number) => void;
+    isCompleted: boolean;
+    isNextUp: boolean;
+    dispatchingStageId: string | null;
+    odysseyState: OdysseyState;
+}> = ({ stage, onFund, onInvest, isCompleted, isNextUp, dispatchingStageId, odysseyState }) => {
+    const [investmentAmount, setInvestmentAmount] = useState(100000);
+    const isLoading = dispatchingStageId === stage.id;
+    const canAffordMemic = odysseyState.vectors.memic >= stage.complexity;
+    const canAffordCapital = odysseyState.vectors.capital >= investmentAmount;
+
     return (
-        <div className={`p-3 rounded-md transition-all duration-300 ${isNext ? 'bg-blue-900/40 border border-blue-600' : 'bg-slate-800/50'}`}>
-            <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-1">{isLoading ? <div className="w-4 h-4 rounded-full border-2 border-dashed border-blue-400 animate-spin"></div> : <StageStatusIcon status={status} />}</div>
+        <div className={`p-3 rounded-md transition-all duration-300 ${isNextUp ? 'bg-blue-900/40 border border-blue-600' : isCompleted ? 'bg-slate-800/50 opacity-70' : 'bg-slate-800/50'}`}>
+             <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-1">
+                    {isCompleted ? <ClipboardDocumentCheckIcon className="h-5 w-5 text-green-400" /> : <div className={`w-3 h-3 mt-1 rounded-full ${isNextUp ? 'bg-blue-400' : 'bg-slate-600 border-2 border-slate-500'}`}></div>}
+                </div>
                 <div className="flex-grow">
-                    <p className={`font-semibold ${isNext ? 'text-blue-200' : 'text-slate-300'}`}>{stage.name}</p>
+                    <p className={`font-semibold ${isNextUp ? 'text-blue-200' : 'text-slate-300'}`}>{stage.name}</p>
                     <p className="text-xs text-slate-400 mt-1">{stage.description}</p>
-                    {isNext && (
+                    {isNextUp && (
                          <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-3">
-                            <div>
-                                <p className="text-xs text-slate-400 mb-1.5">Projected Return:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {(stage.reward?.memic || 0) > 0 && <RewardPill icon={<MemicIcon className="h-4 w-4"/>} value={stage.reward!.memic!} colorClass="bg-blue-900/50 text-blue-300" />}
-                                    {(stage.reward?.genetic || 0) > 0 && <RewardPill icon={<GeneticIcon className="h-4 w-4"/>} value={stage.reward!.genetic!} colorClass="bg-teal-900/50 text-teal-300" />}
-                                    {(stage.reward?.benchmark || 0) > 0 && <RewardPill icon={<SystemClarityIcon className="h-4 w-4"/>} value={stage.reward!.benchmark!} colorClass="bg-pink-900/50 text-pink-300" />}
-                                </div>
-                            </div>
-                             <button
-                                onClick={onDispatch}
-                                disabled={!canAfford || isLoading}
+                            <h5 className="text-xs text-slate-300 font-semibold">Fund or Invest in this Stage:</h5>
+                            {/* Path 1: Fund with Memic */}
+                            <button
+                                onClick={onFund}
+                                disabled={!canAffordMemic || isLoading}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 text-slate-200 border border-slate-600 enabled:hover:bg-blue-600 enabled:hover:text-white enabled:hover:border-blue-500"
                             >
-                                {isLoading ? (
-                                    <span>Agent Working...</span>
-                                ) : (
-                                    <>
-                                        <AgentTypeIcon type={stage.agent} />
-                                        <span>Fund Stage</span>
-                                        <div className="flex items-center gap-1 ml-auto text-blue-300">
-                                            <MemicIcon className="h-4 w-4" />
-                                            <span>{stage.complexity.toLocaleString()}</span>
-                                        </div>
-                                    </>
-                                )}
+                                {isLoading ? (<span>Agent Working...</span>) : (<>
+                                <AgentTypeIcon type={stage.agent} />
+                                <span>Fund R&D with Memic</span>
+                                <div className="flex items-center gap-1 ml-auto text-blue-300"><MemicIcon className="h-4 w-4" /><span>{stage.complexity.toLocaleString()}</span></div>
+                                </>)}
                             </button>
-                            {!canAfford && !isLoading && <p className="text-xs text-red-400 text-center mt-1">Insufficient Memic</p>}
+                            {!canAffordMemic && !isLoading && <p className="text-xs text-red-400 text-center mt-1">Insufficient Memic Points</p>}
+                           
+                           {/* Path 2: Invest with Capital */}
+                           <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    step="50000"
+                                    value={investmentAmount}
+                                    onChange={e => setInvestmentAmount(Number(e.target.value))}
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-md px-2 py-1 text-sm text-right"
+                                />
+                                <button
+                                    onClick={() => onInvest(investmentAmount)}
+                                    disabled={!canAffordCapital || isLoading || investmentAmount <= 0}
+                                    className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg font-semibold transition-all duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-green-800/50 text-green-300 border border-green-700 enabled:hover:bg-green-700 enabled:hover:text-white"
+                                >
+                                    <BanknotesIcon className="h-4 w-4" />
+                                    <span>Invest</span>
+                                </button>
+                           </div>
+                             {!canAffordCapital && !isLoading && <p className="text-xs text-red-400 text-center mt-1">Insufficient Capital</p>}
                          </div>
                     )}
                 </div>
@@ -169,19 +169,21 @@ const InterventionCard: React.FC<{
     odysseyState: OdysseyState;
     onDispatchAgent: (interventionId: string, stageId: string) => void;
     dispatchingStageId: string | null;
-}> = ({ item, odysseyState, onDispatchAgent, dispatchingStageId }) => {
+    onAddToCart: (intervention: MarketplaceIntervention) => void;
+    onAddToPortfolio: (intervention: MarketplaceIntervention, stage: RAndDStage, amount: number) => void;
+}> = ({ item, odysseyState, onDispatchAgent, dispatchingStageId, onAddToCart, onAddToPortfolio }) => {
     const [evidenceVisible, setEvidenceVisible] = useState(false);
     
     const completedStageIds = new Set(odysseyState.completedStages[item.id] || []);
     const allStages = [...item.researchStages, ...item.engineeringStages];
     const totalStages = allStages.length;
     
-    // Linearly map completed stages (0 to totalStages) to TRL (1 to 9)
     const technologyReadinessLevel = totalStages > 0 
         ? Math.round(1 + (completedStageIds.size * 8) / totalStages)
         : 9;
         
     const isProjectComplete = completedStageIds.size === totalStages;
+    const isInCart = odysseyState.rejuvenationCart.some(cartItem => cartItem.interventionId === item.id);
     
     let firstBlockedStage: RAndDStage | null = null;
     for (const stage of allStages) {
@@ -206,33 +208,24 @@ const InterventionCard: React.FC<{
                 </div>
                 
                 {/* R&D Pipeline */}
-                <div className="space-y-3 mb-4">
-                    {item.researchStages.length > 0 && <h5 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><MicroscopeIcon/> Research Stages</h5>}
-                    {item.researchStages.map(stage => {
-                        const status = completedStageIds.has(stage.id) ? 'Completed' : (firstBlockedStage?.id === stage.id ? 'In Progress' : 'Blocked');
-                        return <StagePill 
-                                    key={stage.id} 
-                                    stage={stage} 
-                                    status={status}
-                                    canAfford={odysseyState.vectors.memic >= stage.complexity}
-                                    onDispatch={() => onDispatchAgent(item.id, stage.id)}
-                                    isLoading={dispatchingStageId === stage.id}
-                                />;
-                    })}
-                    
-                    {item.engineeringStages.length > 0 && <h5 className="flex items-center gap-2 text-sm font-semibold text-slate-300 mt-4"><WrenchScrewdriverIcon/> Engineering Stages</h5>}
-                    {item.engineeringStages.map(stage => {
-                        const status = completedStageIds.has(stage.id) ? 'Completed' : (firstBlockedStage?.id === stage.id ? 'In Progress' : 'Blocked');
-                        return <StagePill 
-                                    key={stage.id} 
-                                    stage={stage} 
-                                    status={status}
-                                    canAfford={odysseyState.vectors.memic >= stage.complexity}
-                                    onDispatch={() => onDispatchAgent(item.id, stage.id)}
-                                    isLoading={dispatchingStageId === stage.id}
-                                />;
-                    })}
-                </div>
+                {allStages.length > 0 && (
+                    <div className="space-y-3 mb-4">
+                        <h5 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><MicroscopeIcon/> R&D Pipeline</h5>
+                        {allStages.map(stage => (
+                            <StagePill 
+                                key={stage.id} 
+                                stage={stage} 
+                                isCompleted={completedStageIds.has(stage.id)}
+                                isNextUp={firstBlockedStage?.id === stage.id}
+                                onFund={() => onDispatchAgent(item.id, stage.id)}
+                                onInvest={(amount) => onAddToPortfolio(item, stage, amount)}
+                                dispatchingStageId={dispatchingStageId}
+                                odysseyState={odysseyState}
+                            />
+                        ))}
+                    </div>
+                )}
+
 
                 {/* Evidence Section */}
                 <div className="bg-slate-900/40 rounded-lg border border-slate-700/50 mb-4">
@@ -264,15 +257,17 @@ const InterventionCard: React.FC<{
 
              {isProjectComplete && item.finalProduct && (
                 <div className="mt-auto pt-4 border-t border-slate-700/50">
-                    <p className="text-center text-green-300 font-semibold mb-2">Technology Ready!</p>
-                    <a
-                        href={item.finalProduct.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full text-center block px-4 py-2 text-sm font-semibold rounded-lg transition-colors border bg-teal-600 text-white border-teal-500 hover:bg-teal-500"
+                    <button
+                        onClick={() => onAddToCart(item)}
+                        disabled={isInCart}
+                        className="w-full text-center block px-4 py-2 text-sm font-semibold rounded-lg transition-colors border disabled:cursor-not-allowed bg-teal-600 text-white border-teal-500 enabled:hover:bg-teal-500 disabled:bg-slate-600 disabled:border-slate-500 disabled:text-slate-300"
                     >
-                        Purchase from {item.finalProduct.provider} for ${item.finalProduct.priceUSD.toLocaleString()}
-                    </a>
+                        {isInCart ? (
+                           <span className="flex items-center justify-center gap-2"><CheckCircleIcon /> In Rejuvenation Plan</span>
+                        ) : (
+                             `Add to Plan - $${item.finalProduct.priceUSD.toLocaleString()}`
+                        )}
+                    </button>
                 </div>
             )}
         </div>
@@ -280,17 +275,17 @@ const InterventionCard: React.FC<{
 };
 
 
-const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = ({ odysseyState, onDispatchAgent, dispatchingStageId }) => {
+const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = ({ odysseyState, onDispatchAgent, dispatchingStageId, onAddToCart, onAddToPortfolio }) => {
     return (
         <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-4">
                 <CartIcon className="h-8 w-8 text-teal-300" />
                 <h2 className="text-2xl font-bold text-slate-100 text-center sm:text-left">
-                    R&D Dashboard
+                    Intervention Marketplace
                 </h2>
             </div>
             <p className="text-slate-400 text-center sm:text-left mb-6">
-                Advance the frontiers of science. Invest Memic points to fund R&D stages, increasing the Technology Readiness Level (TRL) of groundbreaking interventions.
+                Browse available diagnostics and therapies. Mature technologies (TRL 9) can be added to your rejuvenation plan. Fund R&D for promising concepts to accelerate their development.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
@@ -301,6 +296,8 @@ const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = ({ odyss
                         odysseyState={odysseyState}
                         onDispatchAgent={onDispatchAgent}
                         dispatchingStageId={dispatchingStageId}
+                        onAddToCart={onAddToCart}
+                        onAddToPortfolio={onAddToPortfolio}
                     />
                 ))}
             </div>

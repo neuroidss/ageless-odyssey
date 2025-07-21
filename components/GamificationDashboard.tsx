@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { OdysseyState, Realm, RealmDefinition } from '../types';
-import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon, OracleIcon, SystemClarityIcon } from './icons';
+import { TrophyIcon, GeneticIcon, MemicIcon, CognitiveBandwidthIcon, ShellIcon, BiologicalOptimizerIcon, SubstrateEnhancedIcon, ExocortexIntegratorIcon, DigitalAscendantIcon, DistributedEntityIcon, StellarMetamorphIcon, AscensionIcon, OracleIcon, SystemClarityIcon, BanknotesIcon } from './icons';
 
 const AchievementCard: React.FC<{ achievement: OdysseyState['achievements'][string] }> = ({ achievement }) => {
     return (
@@ -14,11 +14,11 @@ const AchievementCard: React.FC<{ achievement: OdysseyState['achievements'][stri
     );
 };
 
-const VectorDisplay: React.FC<{ icon: React.ReactNode; label: string; value: number; color: string; progress?: number; required?: number; }> = ({ icon, label, value, color, progress, required }) => (
+const VectorDisplay: React.FC<{ icon: React.ReactNode; label: string; value: number; color: string; progress?: number; required?: number; isCurrency?: boolean; }> = ({ icon, label, value, color, progress, required, isCurrency }) => (
     <div className="flex flex-col items-center text-center">
         <div className={`h-7 w-7 mb-1 ${color}`}>{icon}</div>
         <div className="text-xs font-semibold text-slate-300">{label}</div>
-        <div className={`text-lg font-bold ${color}`}>{Math.round(value)}{required ? ` / ${required}`: ''}</div>
+        <div className={`text-lg font-bold ${color}`}>{isCurrency ? `$${Math.round(value).toLocaleString()}` : Math.round(value)}{required ? ` / ${required}`: ''}</div>
         {progress !== undefined && (
             <div className="w-16 h-1.5 bg-slate-700 rounded-full mt-1">
                 <div className={`h-full rounded-full ${color.replace('text','bg')}`} style={{ width: `${Math.min(progress, 100)}%` }}></div>
@@ -52,8 +52,16 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState, dynamicRealmDefinitions
 
     return (
         <>
-            <div className="w-full max-w-4xl p-4 bg-slate-800/50 border border-slate-700 rounded-2xl flex flex-col gap-4 shadow-lg">
-                <h2 className="text-center text-2xl font-bold text-slate-200">The Odyssey Map</h2>
+            <div className="w-full max-w-5xl p-4 bg-slate-800/50 border border-slate-700 rounded-2xl flex flex-col gap-4 shadow-lg">
+                <div className="grid grid-cols-1 md:grid-cols-3 items-center">
+                    <div className="hidden md:block">
+                        <VectorDisplay icon={<BanknotesIcon />} label="Capital" value={odysseyState.vectors.capital} color="text-green-400" isCurrency />
+                    </div>
+                    <h2 className="text-center text-2xl font-bold text-slate-200">The Odyssey Map</h2>
+                    <div className="hidden md:flex justify-end">
+                         <VectorDisplay icon={<SystemClarityIcon />} label="Clarity" value={odysseyState.benchmarkScore} color="text-pink-400" />
+                    </div>
+                </div>
                 
                 {/* Realm Progression Map */}
                 <div className="relative flex items-center justify-between w-full px-4 sm:px-8 py-4">
@@ -102,7 +110,6 @@ const OdysseyMap: React.FC<{ odysseyState: OdysseyState, dynamicRealmDefinitions
                                     <VectorDisplay icon={<GeneticIcon />} label="Bio Control" value={odysseyState.vectors.genetic} required={nextRealmDef.thresholds.genetic} color="text-teal-400" progress={(odysseyState.vectors.genetic / nextRealmDef.thresholds.genetic) * 100} />
                                     <VectorDisplay icon={<MemicIcon />} label="Knowledge" value={odysseyState.vectors.memic} required={nextRealmDef.thresholds.memic} color="text-blue-400" progress={(odysseyState.vectors.memic / nextRealmDef.thresholds.memic) * 100}/>
                                     <VectorDisplay icon={<CognitiveBandwidthIcon />} label="Cognition" value={odysseyState.vectors.cognitive} required={nextRealmDef.thresholds.cognitive} color="text-yellow-400" progress={(odysseyState.vectors.cognitive / nextRealmDef.thresholds.cognitive) * 100}/>
-                                    <VectorDisplay icon={<SystemClarityIcon />} label="Clarity" value={odysseyState.benchmarkScore} color="text-pink-400" />
                                 </div>
                             </>
                         ) : isOracleLoading ? (

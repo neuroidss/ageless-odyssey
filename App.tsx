@@ -12,8 +12,9 @@ import { ToastContainer } from './components/Toast';
 import DebugLogView from './components/DebugLogView';
 import QuestLog from './components/QuestLog';
 import InterventionMarketplace from './components/InterventionMarketplace';
+import { AgentType, MarketplaceIntervention, RAndDStage } from './types';
 import { MARKETPLACE_INTERVENTIONS } from './constants';
-import { AgentType } from './types';
+import PortfolioView from './components/PortfolioView';
 
 const APP_STATE_STORAGE_KEY = 'agelessOdysseyState';
 
@@ -40,6 +41,10 @@ const App: React.FC = () => {
         setOdysseyState,
         setDynamicRealmDefinitions,
         handleStageCompletion,
+        handleAddToCart,
+        handleAddToPortfolio,
+        handleExecutePlan,
+        handleFinalizeInvestments,
     } = useOdysseyLogic(settings.model, settings.apiKey, addLog, APP_STATE_STORAGE_KEY);
 
     const {
@@ -122,11 +127,18 @@ const App: React.FC = () => {
     const Dashboard = () => (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 items-start">
             <div className="lg:col-span-1 flex flex-col gap-8 lg:sticky lg:top-8">
+                <PortfolioView 
+                    odysseyState={odysseyState} 
+                    onExecutePlan={handleExecutePlan} 
+                    onFinalizeInvestments={handleFinalizeInvestments}
+                />
                 <QuestLog quests={quests} />
                 <InterventionMarketplace
                     odysseyState={odysseyState}
                     onDispatchAgent={handleFundAndDispatchStage}
                     dispatchingStageId={dispatchingStageId}
+                    onAddToCart={handleAddToCart}
+                    onAddToPortfolio={handleAddToPortfolio}
                 />
             </div>
             <div className="lg:col-span-2">

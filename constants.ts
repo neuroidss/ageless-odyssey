@@ -1,3 +1,4 @@
+
 import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice, type RealmDefinition, Quest, AgentType, MarketplaceIntervention } from './types';
 
 export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] = [
@@ -117,7 +118,14 @@ export const MARKETPLACE_INTERVENTIONS: MarketplaceIntervention[] = [
         description: 'Systemic rejuvenation therapy using transient expression of Yamanaka factors (OSK) to reset epigenetic clocks without inducing tumorigenesis.',
         type: 'therapy',
         evidence: [
-             { type: 'peer_reviewed_study', title: 'In vivo partial reprogramming of aged cells preserves identity and reverses hallmarks of aging', source: 'Cell', url: 'https://www.cell.com/cell/fulltext/S0092-8674(22)01332-X', summary: 'Demonstrated that cyclic expression of OSK in aged mice led to rejuvenated epigenetic signatures and restored function in multiple tissues without causing cancer.', metrics: { effectSize: '~30% age reversal by clock', sampleSize: 'N=aged mice'} },
+             { 
+                type: 'peer_reviewed_study', 
+                title: 'In Vivo Amelioration of Age-Associated Hallmarks by Partial Reprogramming', 
+                source: 'Cell', 
+                url: 'https://www.cell.com/cell/fulltext/S0092-8674(16)31664-6', 
+                summary: 'A landmark 2016 study demonstrating that short-term, cyclic expression of Yamanaka factors in progeroid mice reversed signs of aging and extended lifespan, without inducing tumors or losing cell identity.', 
+                metrics: { effectSize: '30% lifespan extension (progeroid mice)' } 
+             },
              { type: 'patent_filing', title: 'Methods for partial reprogramming of cells', source: 'USPTO', summary: 'Patents filed by major research institutes cover various methods for controlling Yamanaka factor expression to avoid pluripotency.'}
         ],
         researchStages: [

@@ -135,8 +135,8 @@ const searchPubMed = async (query: string, addLog: (message: string) => void): P
     return results;
 };
 
-const searchBioRxiv = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
-    addLog(`[Search.BioRxiv] Starting search via PubMed Central API...`);
+const searchBioRxivArchive = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+    addLog(`[Search.BioRxivArchive] Starting search via PubMed Central API...`);
     const results: SearchResult[] = [];
     try {
         // Process the query to be more flexible for PubMed's search engine.
@@ -176,7 +176,7 @@ const searchBioRxiv = async (query: string, addLog: (message: string) => void): 
                         link: link,
                         title: article.title,
                         snippet: `Authors: ${article.authors.map((a: {name: string}) => a.name).join(', ')}. PubDate: ${article.pubdate}.`,
-                        source: SearchDataSource.BioRxiv
+                        source: SearchDataSource.BioRxivSearch
                     });
                 }
             });
@@ -185,9 +185,52 @@ const searchBioRxiv = async (query: string, addLog: (message: string) => void): 
             addLog(`[Fetch] No bioRxiv preprints found in PMC for the query.`);
         }
     } catch (error) {
-        addLog(`[Search.BioRxiv] Error searching via PMC: ${error}`);
+        addLog(`[Search.BioRxivArchive] Error searching via PMC: ${error}`);
     }
     return results;
+};
+
+const monitorBioRxivFeed = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+    const feedUrl = 'https://connect.biorxiv.org/biorxiv_xml.php?subject=all';
+    addLog(`[Search.BioRxivFeed] Monitoring live feed from ${feedUrl}`);
+    const results: SearchResult[] = [];
+    try {
+        // BioRxiv RSS feed is CORS-enabled, no proxy needed.
+        const response = await fetch(feedUrl);
+        if (!response.ok) throw new Error(`bioRxiv RSS feed failed with status ${response.status}`);
+        
+        const xmlText = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, "application/xml");
+        const items = doc.querySelectorAll("item");
+
+        const queryKeywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 2); // Simple keyword extraction
+
+        items.forEach(item => {
+            const title = item.querySelector("title")?.textContent ?? '';
+            const link = item.querySelector("link")?.textContent ?? '';
+            const description = item.querySelector("description")?.textContent ?? '';
+            
+            const contentToCheck = `${title.toLowerCase()} ${description.toLowerCase()}`;
+            
+            // Check if the content is relevant to the query
+            const isRelevant = queryKeywords.some(keyword => contentToCheck.includes(keyword));
+
+            if (isRelevant && link) {
+                results.push({
+                    title: stripTags(title),
+                    link: stripTags(link),
+                    snippet: stripTags(description).substring(0, 300) + '...',
+                    source: SearchDataSource.BioRxivFeed,
+                });
+            }
+        });
+        addLog(`[Search.BioRxivFeed] Found ${results.length} relevant preprints in the live feed.`);
+        return results.slice(0, 5); // Return top 5 relevant matches from the feed
+    } catch (error) {
+        addLog(`[Search.BioRxivFeed] Error monitoring live feed: ${error}`);
+        return [];
+    }
 };
 
 
@@ -293,7 +336,8 @@ export const performFederatedSearch = async (
     const searchPromises = sources.map(source => {
         switch(source) {
             case SearchDataSource.PubMed: return searchPubMed(query, addLog);
-            case SearchDataSource.BioRxiv: return searchBioRxiv(query, addLog);
+            case SearchDataSource.BioRxivSearch: return searchBioRxivArchive(query, addLog);
+            case SearchDataSource.BioRxivFeed: return monitorBioRxivFeed(query, addLog);
             case SearchDataSource.GooglePatents: return searchGooglePatents(query, addLog);
             case SearchDataSource.WebSearch: return searchWeb(query, addLog);
             case SearchDataSource.OpenGenes:

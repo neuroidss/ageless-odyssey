@@ -8,7 +8,7 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
   const [device, setDevice] = useState<HuggingFaceDevice>(DEFAULT_HUGGING_FACE_DEVICE);
   const [apiKey, setApiKey] = useState<string>('');
   const [gpuFeatures, setGpuFeatures] = useState<GPUSupportedFeatures | null>(null);
-  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.PubMed, SearchDataSource.BioRxiv, SearchDataSource.GooglePatents, SearchDataSource.OpenGenes]);
+  const [searchSources, setSearchSources] = useState<SearchDataSource[]>([SearchDataSource.PubMed, SearchDataSource.BioRxivSearch, SearchDataSource.GooglePatents, SearchDataSource.OpenGenes]);
   
   // Autonomous Mode State
   const [isAutonomousMode, setIsAutonomousMode] = useState<boolean>(false);
