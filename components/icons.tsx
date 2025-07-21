@@ -291,8 +291,8 @@ export const AcademicCapIcon = ({className = "h-5 w-5"}) => (
 
 export const BeakerIcon = ({className = "h-4 w-4"}) => ( // Lab Study
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c.238.15.47.32.686.519l.243.243a2.25 2.25 0 0 1 0 3.182L5.25 14.5M9.75 3.104c.238-.15.47-.32.686-.519l.243-.243a2.25 2.25 0 0 0 0-3.182L5.25 4.5M5.25 4.5 9.75 9m0 0L14.25 4.5M5.25 4.5l4.5 4.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 3.104c-1.144.72-2.348 1.488-3.606 2.288l-1.5 1.5a2.25 2.25 0 0 1-3.182 0l-4.5-4.5M18.75 3.104c.157-.099.31-.205.457-.318l.243-.243a2.25 2.25 0 0 0 0-3.182L15 2.25M18.75 3.104c.157.099.31.205.457.318l.243.243a2.25 2.25 0 0 1 0 3.182L15 9.75M15 9.75 18.75 6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m9.75 3.104 1.148.922a2.25 2.25 0 0 1 .659 1.591V14.25m-2.25-11.146L5.25 6.75m4.5-3.646.243.243a2.25 2.25 0 0 1 0 3.182L5.25 11.25m4.5-8.146.243-.243a2.25 2.25 0 0 0-3.182-3.182L5.25 4.5m4.5 3.75-4.5 4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 3.104a2.25 2.25 0 0 0-3.182-3.182l-.243.243-.243.243a2.25 2.25 0 0 0 0 3.182L18.75 9.75M18.75 3.104l-3.75 3.75" />
     </svg>
 );
 

@@ -11,7 +11,7 @@ import WorkspaceView from './components/ResultsDisplay';
 import { ToastContainer } from './components/Toast';
 import DebugLogView from './components/DebugLogView';
 import QuestLog from './components/QuestLog';
-import InterventionMarketplace from './components/InterventionMarketplace';
+import { InterventionMarketplace } from './components/InterventionMarketplace';
 import { AgentType, MarketplaceIntervention, RAndDStage } from './types';
 import { MARKETPLACE_INTERVENTIONS } from './constants';
 import PortfolioView from './components/PortfolioView';

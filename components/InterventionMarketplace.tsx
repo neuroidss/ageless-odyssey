@@ -21,7 +21,7 @@ const InterventionTypeIcon: React.FC<{ type: MarketplaceIntervention['type'], cl
         case 'supplement': return <PillIcon className={className} />;
         case 'therapy': return <TherapyIcon className={className} />;
         case 'diagnostic': return <PresentationChartLineIcon className={className} />;
-        case 'theoretical': return <BeakerIcon className={`${className} text-purple-400`} />;
+        case 'theoretical': return <LightbulbIcon className={`${className} text-purple-400`} />;
         default: return <PillIcon className={className} />;
     }
 };
@@ -194,106 +194,116 @@ const InterventionCard: React.FC<{
     }
     
     return (
-        <div className={`bg-slate-800/50 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:shadow-2xl ${isProjectComplete ? 'hover:border-teal-500/50 hover:shadow-teal-900/20' : 'hover:border-blue-500/50 hover:shadow-blue-900/20'}`}>
+        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 flex flex-col justify-between h-full">
             <div>
-                <div className="flex items-start gap-4 mb-3">
-                    <div className={`${isProjectComplete ? 'text-teal-300' : 'text-blue-300'} flex-shrink-0 mt-1`}><InterventionTypeIcon type={item.type} className="h-7 w-7"/></div>
-                    <h4 className="font-bold text-slate-100 text-lg flex-grow">{item.name}</h4>
-                </div>
-                
-                <p className="text-sm text-slate-300 mb-4">{item.description}</p>
-                
-                <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-700/50 mb-4 space-y-3">
-                    <HypeCycleDisplay level={technologyReadinessLevel} />
-                </div>
-                
-                {/* R&D Pipeline */}
-                {allStages.length > 0 && (
-                    <div className="space-y-3 mb-4">
-                        <h5 className="flex items-center gap-2 text-sm font-semibold text-slate-300"><MicroscopeIcon/> R&D Pipeline</h5>
-                        {allStages.map(stage => (
-                            <StagePill 
-                                key={stage.id} 
-                                stage={stage} 
-                                isCompleted={completedStageIds.has(stage.id)}
-                                isNextUp={firstBlockedStage?.id === stage.id}
-                                onFund={() => onDispatchAgent(item.id, stage.id)}
-                                onInvest={(amount) => onAddToPortfolio(item, stage, amount)}
-                                dispatchingStageId={dispatchingStageId}
-                                odysseyState={odysseyState}
-                            />
-                        ))}
+                {/* Header */}
+                <div className="flex items-start gap-4 mb-4">
+                    <div className="text-blue-400 mt-1 flex-shrink-0">
+                        <InterventionTypeIcon type={item.type} />
                     </div>
-                )}
+                    <div className="flex-1">
+                        <h3 className="text-xl font-bold text-slate-100">{item.name}</h3>
+                        <p className="text-sm text-slate-400 capitalize">{item.type}</p>
+                    </div>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed mb-4">{item.description}</p>
+                
+                {/* TRL & Hype Cycle */}
+                <HypeCycleDisplay level={technologyReadinessLevel} />
 
-
-                {/* Evidence Section */}
-                <div className="bg-slate-900/40 rounded-lg border border-slate-700/50 mb-4">
-                    <button onClick={() => setEvidenceVisible(!evidenceVisible)} className="w-full flex justify-between items-center p-3">
-                        <h5 className="text-sm font-semibold text-slate-300">Scientific Evidence ({item.evidence.length})</h5>
-                        <ChevronDownIcon className={`h-5 w-5 text-slate-400 transition-transform ${evidenceVisible ? 'rotate-180' : ''}`} />
+                {/* Evidence Dropdown */}
+                <div className="mt-4">
+                    <button onClick={() => setEvidenceVisible(!evidenceVisible)} className="flex justify-between items-center w-full text-sm font-semibold text-slate-300 hover:text-white">
+                        <span>Supporting Evidence ({item.evidence.length})</span>
+                        <ChevronDownIcon className={`transition-transform duration-200 ${evidenceVisible ? 'rotate-180' : ''}`} />
                     </button>
                     {evidenceVisible && (
-                        <div className="p-3 border-t border-slate-700 space-y-3">
-                            {item.evidence.map((ev, idx) => (
-                                <div key={idx} className="flex items-start gap-3">
-                                    <div className="flex-shrink-0 mt-1"><EvidenceIcon type={ev.type} /></div>
-                                    <div>
-                                        <p className="text-sm font-semibold text-slate-200">{ev.title} <span className="text-xs font-normal text-slate-500">({ev.source})</span></p>
-                                        <p className="text-xs text-slate-400 mt-1">{ev.summary}</p>
-                                        <div className="flex items-center gap-4 mt-2 text-xs">
-                                            {ev.metrics?.effectSize && <span className="text-slate-400">Effect: <span className="font-semibold text-slate-300">{ev.metrics.effectSize}</span></span>}
-                                            {ev.metrics?.sampleSize && <span className="text-slate-400">Sample: <span className="font-semibold text-slate-300">{ev.metrics.sampleSize}</span></span>}
-                                            {ev.url && <a href={ev.url} target="_blank" rel="noopener noreferrer" className="flex items-center text-blue-400 hover:underline"><LinkIcon className="h-3 w-3 mr-1"/>Link</a>}
-                                        </div>
+                        <div className="mt-2 space-y-2 border-l-2 border-slate-700 pl-3">
+                            {item.evidence.map((e, i) => (
+                                <div key={i} className="text-xs">
+                                    <div className="flex items-center gap-2 font-bold text-slate-300">
+                                        <EvidenceIcon type={e.type} />
+                                        <span>{e.title}</span>
                                     </div>
+                                    <p className="text-slate-400 italic my-1">"{e.summary}"</p>
+                                    {e.url && <a href={e.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-400 hover:underline"><LinkIcon className="h-3 w-3" />Source</a>}
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
 
+                {/* R&D Stages */}
+                {!isProjectComplete && totalStages > 0 && (
+                     <div className="mt-4 pt-4 border-t border-slate-600">
+                         <h4 className="font-semibold text-slate-200 mb-2">R&D Pipeline</h4>
+                         <div className="space-y-2">
+                            {item.researchStages.map(stage => (
+                                <StagePill 
+                                    key={stage.id} 
+                                    stage={stage} 
+                                    onFund={() => onDispatchAgent(item.id, stage.id)}
+                                    onInvest={(amount) => onAddToPortfolio(item, stage, amount)}
+                                    isCompleted={completedStageIds.has(stage.id)}
+                                    isNextUp={stage.id === firstBlockedStage?.id}
+                                    dispatchingStageId={dispatchingStageId}
+                                    odysseyState={odysseyState}
+                                />
+                            ))}
+                            {item.engineeringStages.map(stage => (
+                                <StagePill 
+                                    key={stage.id} 
+                                    stage={stage} 
+                                    onFund={() => onDispatchAgent(item.id, stage.id)}
+                                    onInvest={(amount) => onAddToPortfolio(item, stage, amount)}
+                                    isCompleted={completedStageIds.has(stage.id)}
+                                    isNextUp={stage.id === firstBlockedStage?.id}
+                                    dispatchingStageId={dispatchingStageId}
+                                    odysseyState={odysseyState}
+                                />
+                            ))}
+                         </div>
+                     </div>
+                )}
             </div>
-
-             {isProjectComplete && item.finalProduct && (
-                <div className="mt-auto pt-4 border-t border-slate-700/50">
-                    <button
-                        onClick={() => onAddToCart(item)}
-                        disabled={isInCart}
-                        className="w-full text-center block px-4 py-2 text-sm font-semibold rounded-lg transition-colors border disabled:cursor-not-allowed bg-teal-600 text-white border-teal-500 enabled:hover:bg-teal-500 disabled:bg-slate-600 disabled:border-slate-500 disabled:text-slate-300"
-                    >
-                        {isInCart ? (
-                           <span className="flex items-center justify-center gap-2"><CheckCircleIcon /> In Rejuvenation Plan</span>
-                        ) : (
-                             `Add to Plan - $${item.finalProduct.priceUSD.toLocaleString()}`
-                        )}
-                    </button>
+            
+            {/* Action Area */}
+            {isProjectComplete && item.finalProduct && (
+                <div className="mt-4 pt-4 border-t border-green-500/30">
+                     <p className="text-center text-sm font-semibold text-green-300 mb-2">Project Complete & Product Available!</p>
+                     <button 
+                         onClick={() => onAddToCart(item)}
+                         disabled={isInCart}
+                         className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold transition-all duration-300 text-base disabled:opacity-50 disabled:cursor-not-allowed bg-teal-600 text-white border border-teal-500 enabled:hover:bg-teal-500"
+                     >
+                         <CartIcon className="h-5 w-5" />
+                         {isInCart ? 'Added to Plan' : `Add to Rejuvenation Plan ($${item.finalProduct.priceUSD.toLocaleString()})`}
+                     </button>
                 </div>
             )}
         </div>
     );
 };
 
-
-const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = ({ odysseyState, onDispatchAgent, dispatchingStageId, onAddToCart, onAddToPortfolio }) => {
+export const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = ({ odysseyState, onDispatchAgent, dispatchingStageId, onAddToCart, onAddToPortfolio }) => {
     return (
         <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-4">
-                <CartIcon className="h-8 w-8 text-teal-300" />
+                <CartIcon className="h-8 w-8 text-blue-300" />
                 <h2 className="text-2xl font-bold text-slate-100 text-center sm:text-left">
                     Intervention Marketplace
                 </h2>
             </div>
             <p className="text-slate-400 text-center sm:text-left mb-6">
-                Browse available diagnostics and therapies. Mature technologies (TRL 9) can be added to your rejuvenation plan. Fund R&D for promising concepts to accelerate their development.
+                Explore available diagnostics and therapies. Fund cutting-edge research to bring theoretical interventions to reality and add them to your arsenal.
             </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-                {MARKETPLACE_INTERVENTIONS.map(item => (
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 {MARKETPLACE_INTERVENTIONS.map(item => (
                     <InterventionCard 
                         key={item.id} 
                         item={item} 
-                        odysseyState={odysseyState}
+                        odysseyState={odysseyState} 
                         onDispatchAgent={onDispatchAgent}
                         dispatchingStageId={dispatchingStageId}
                         onAddToCart={onAddToCart}
@@ -302,7 +312,5 @@ const InterventionMarketplace: React.FC<InterventionMarketplaceProps> = ({ odyss
                 ))}
             </div>
         </div>
-    )
+    );
 };
-
-export default InterventionMarketplace;

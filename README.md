@@ -16,7 +16,7 @@ This README provides a technical breakdown for experts and collaborators, contex
 
 The application is fundamentally a prototype for an agent-driven system to prioritize spending and investment in the science of life extension. It directly addresses the challenge of making informed decisions in a vast, complex, and rapidly evolving field.
 
-### What's Implemented ("vibecoded")
+### What's Implemented
 
 *   **Investment & Rejuvenation Portfolio:** The central feature is the **Longevity Portfolio**, a dashboard for allocating a symbolic $10M in capital. It's split into two parts:
     1.  **Rejuvenation Plan (The "Shopping Cart"):** For purchasing market-ready therapies and diagnostics (TRL 9) to improve current biological state.
@@ -58,7 +58,7 @@ The app's architecture touches upon two other key longevity tasks.
 
 ---
 
-## Supporting Features (Не основные фичи)
+## Supporting Features
 
 To make the complex process of investment exploration more engaging, a narrative and gamification layer is wrapped around the core engine.
 
