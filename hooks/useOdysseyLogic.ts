@@ -152,6 +152,43 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
 
     const handleApplyIntervention = (interventionId: string | null) => {
         if (!trajectoryState) return;
+
+        // Special case for non-biomarker interventions
+        if (interventionId === 'sleep_abolition') {
+            const intervention = trajectoryState.interventions.find(i => i.id === interventionId);
+            if (!intervention || intervention.status === 'locked') return;
+
+            // Give rewards and unlock achievement
+            setOdysseyState(prev => {
+                const newAchievements = { ...prev.achievements };
+                if (newAchievements.THE_WAKING_DREAM && !newAchievements.THE_WAKING_DREAM.unlocked) {
+                    newAchievements.THE_WAKING_DREAM.unlocked = true;
+                    setToasts(t => [...t, { id: Date.now() + 1, title: 'Achievement Unlocked!', message: newAchievements.THE_WAKING_DREAM.name, icon: 'achievement' }]);
+                }
+                
+                return {
+                    ...prev,
+                    achievements: newAchievements,
+                    vectors: {
+                        ...prev.vectors,
+                        memic: prev.vectors.memic + 10000,
+                    }
+                };
+            });
+            
+            // Disable the intervention after use so it can't be spammed
+            setTrajectoryState(prev => {
+                if (!prev) return null;
+                const newInterventions = prev.interventions.map(i => i.id === 'sleep_abolition' ? {...i, status: 'locked' as const, name: 'Sleep Abolished (Complete)'} : i);
+                return {...prev, interventions: newInterventions, activeInterventionId: null};
+            });
+
+            setToasts(t => [...t, {id: Date.now(), title: "Sleep Abolished!", message: "You have reclaimed a third of your life. Memic capacity increased.", icon: 'levelup'}]);
+            addLog(`Applied special intervention: Sleep Abolition. Granted 10,000 Memic.`);
+            return; 
+        }
+
+        // Normal biological/trajectory interventions
         const newState = applyIntervention(trajectoryState, interventionId);
         setTrajectoryState(newState);
         

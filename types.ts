@@ -1,3 +1,4 @@
+
 // --- WebGPU Type Definitions for Experimental APIs ---
 // These declarations are added to resolve TypeScript errors related to
 // experimental WebGPU features, such as `GPUSupportedFeatures` and `navigator.gpu`.
@@ -285,13 +286,13 @@ export interface InvestmentItem {
 export interface OdysseyState {
   realm: string; // Changed to string to allow dynamic, AI-generated realms
   vectors: {
-    genetic: number;  // Represents biological integrity, improved by interventions
-    memic: number;    // Represents knowledge contribution, improved by research
-    cognitive: number;// Represents consciousness health, tied to longevity score
-    capital: number;  // Represents financial resources for investment
+    genetic: number;  // Represents Substrate Engineering: the degree of deliberate control over your biological and non-biological hardware.
+    memic: number;    // Represents Knowledge Contribution: the accumulation and synthesis of information towards a complete model of the universe.
+    cognitive: number;// Represents Consciousness Integrity: the performance of your conscious substrate, driven by self-mastery.
+    capital: number;  // Represents financial resources for investment.
   };
-  benchmarkScore: number; // Represents the system's clarity and understanding
-  longevityScore: number; // The core metric driving the cognitive vector
+  benchmarkScore: number; // Represents the clarity and predictive power of your engineering models of the universe.
+  longevityScore: number; // The core metric representing self-mastery and system integrity, which drives the cognitive vector.
   achievements: Record<string, Achievement>;
   completedStages: Record<string, string[]>; // interventionId -> array of completed stageIds
   rejuvenationCart: CartItem[];
