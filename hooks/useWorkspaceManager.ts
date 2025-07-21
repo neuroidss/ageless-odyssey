@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { type WorkspaceState, type AgentResponse, type WorkspaceItem, type RAGIndexEntry, type Quest, type OdysseyState, type ToastMessage, type TrajectoryState } from '../types';
+import { type WorkspaceState, type AgentResponse, type WorkspaceItem, type RAGIndexEntry, type Quest, type OdysseyState, type ToastMessage, type TrajectoryState, AgentType } from '../types';
 import { dispatchAgent, synthesizeFindings } from '../services/geminiService';
 import { buildRAGIndex, queryRAGIndex } from '../services/ragService';
 import { useAppSettings } from './useAppSettings'; // Assuming settings hook provides necessary props
@@ -9,7 +9,6 @@ import { createNextWorkspaceState } from '../services/workspaceUtils';
 export const useWorkspaceManager = (
     settings: ReturnType<typeof useAppSettings>,
     addLog: (msg: string) => void,
-    onQuestCompleted: (quest: Quest) => void,
     storageKey: string
 ) => {
     const [topic, setTopic] = useState<string>('molecules for anti-aging and rejuvenation');
@@ -75,44 +74,39 @@ export const useWorkspaceManager = (
         return questCompleted;
     }, []);
 
-    const handleDispatchAgent = useCallback(async (agentType: string) => {
-        if (!topic) {
+    const handleDispatchAgent = useCallback(async ({ agentType, query }: { agentType: AgentType; query?: string }) => {
+        const dispatchQuery = query || topic;
+        if (!dispatchQuery) {
             setError("Please enter a research topic first.");
-            return;
+            return null;
         }
         if (settings.model.provider === 'Google AI' && !settings.apiKey && !process.env.API_KEY) {
             setError("Please enter your Google AI API Key in the settings to use this model.");
-            return;
+            return null;
         }
 
         setIsLoading(true);
         setError(null);
         setSynthesisError(null);
         setLoadingMessage(`Dispatching ${agentType}...`);
-        addLog(`Dispatching agent '${agentType}' for topic: "${topic}"`);
+        addLog(`Dispatching agent '${agentType}' for topic: "${dispatchQuery}"`);
 
         try {
-            const ragContext = await queryRAGIndex(topic, ragIndex, addLog);
+            const ragContext = await queryRAGIndex(dispatchQuery, ragIndex, addLog);
             const response = await dispatchAgent(
-                topic, agentType as any, settings.model, settings.quantization, addLog, settings.apiKey,
+                dispatchQuery, agentType, settings.model, settings.quantization, addLog, settings.apiKey,
                 settings.device, settings.searchSources, setLoadingMessage, undefined, ragContext ?? undefined
             );
             addLog(`Agent '${agentType}' finished. Found ${(response.items?.length || 0)} items.`);
 
             const previousWorkspace = workspaceHistory.length > 0 ? workspaceHistory[workspaceHistory.length - 1] : null;
-            const newWorkspace = createNextWorkspaceState(topic, previousWorkspace, response);
-
-            // This is tricky. handleDispatchAgent doesn't know about quests.
-            // The caller (App.tsx) needs to provide this. This is a dependency inversion problem.
-            // For now, let's assume `onQuestCompleted` updates the quests state elsewhere.
-            // A better way would be for `useWorkspaceManager` to also manage quests, or use a shared context.
-            // For this refactor, we'll keep it simple and rely on the caller to wire it up.
+            const newWorkspace = createNextWorkspaceState(dispatchQuery, previousWorkspace, response);
             
             setWorkspaceHistory(prev => [...prev, newWorkspace]);
             setTimeLapseIndex(workspaceHistory.length);
             setHasSearched(true);
             
-            return response; // Return response for quest checking
+            return response;
         } catch (e) {
             const message = e instanceof Error ? e.message : 'An unknown error occurred.';
             setError(message);

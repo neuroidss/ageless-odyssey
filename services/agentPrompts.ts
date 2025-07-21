@@ -30,6 +30,31 @@ export const buildAgentPrompts = (
     const querySlug = query.replace(/\s+/g, '-').toLowerCase();
 
     switch (agentType) {
+        case AgentType.Strategist: {
+            // The `query` for a strategist is the specific problem/stage description
+             const userPrompt = `I am facing the following complex R&D challenge:\n"${query}"\n\nAnalyze this problem and propose three distinct, viable, and concrete pathways to solve it. For each pathway, provide a name, a detailed description of the approach, key pros, and key cons.`;
+             return {
+                systemInstruction: `You are a world-class R&D strategist with deep expertise in biotechnology and project management. Your task is to break down a complex problem into actionable, alternative strategies. ${jsonOutputInstruction}`,
+                userPrompt,
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        pathways: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    name: { type: Type.STRING },
+                                    description: { type: Type.STRING },
+                                    pros: { type: Type.ARRAY, items: {type: Type.STRING} },
+                                    cons: { type: Type.ARRAY, items: {type: Type.STRING} },
+                                }
+                            }
+                        }
+                    }
+                }
+             };
+        }
         case 'AscensionOracle': {
             if (!oracleContext) throw new Error("Oracle context is required for AscensionOracle agent.");
             const { odysseyState, workspace, trajectoryState } = oracleContext;

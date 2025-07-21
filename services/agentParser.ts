@@ -35,6 +35,16 @@ export const parseAgentResponse = (jsonText: string, agentType: AgentType, addLo
         const response: AgentResponse = {};
 
         switch (agentType) {
+            case AgentType.Strategist:
+                // The strategist agent response is for display and doesn't directly map to workspace items.
+                // We will handle displaying the pathways in the UI when the response is received.
+                // For now, we can just log that we received it.
+                if (data.pathways) {
+                     addLog(`[Parser] Parsed ${data.pathways.length} strategic pathways from Strategist agent.`);
+                     // The UI component will need to handle this custom response.
+                     // We could pass it through a generic field in AgentResponse if needed.
+                }
+                break;
             case AgentType.QuestCrafter:
                 if (data.newQuest) response.newQuest = data.newQuest;
                 break;

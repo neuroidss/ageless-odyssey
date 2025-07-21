@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice, type RealmDefinition, Quest, AgentType } from './types';
+import { ModelProvider, type ModelDefinition, type Achievement, Realm, Intervention, type HuggingFaceDevice, type RealmDefinition, Quest, AgentType, MarketplaceIntervention } from './types';
 
 export const HUGGING_FACE_DEVICES: {label: string, value: HuggingFaceDevice}[] = [
     { label: 'wasm', value: 'wasm' },
@@ -76,6 +76,78 @@ export const INTERVENTIONS: (Omit<Intervention, 'status'> & { sophistication: nu
     { id: 'neuro_interface', name: 'Neural-Digital Interface', description: 'Augment the brain with a direct neural link, the first step towards an Exocortex.', type: 'radical', sophistication: 10, effects: { cognitive: 5000 } },
     { id: 'mind_upload', name: 'Mind Substrate Transfer', description: 'Complete transfer of consciousness to a digital substrate. Bypasses all biological limitations.', type: 'radical', sophistication: 20, effects: { all_biomarkers: 1.0, cognitive: 15000 } },
     { id: 'distributed_consciousness', name: 'Consciousness Distribution', description: 'Fractalize your digital mind across a decentralized network, making it resilient and near-omnipresent.', type: 'radical', sophistication: 50, effects: { cognitive: 50000 } },
+];
+
+export const MARKETPLACE_INTERVENTIONS: MarketplaceIntervention[] = [
+    {
+        id: 'mp_epigenetic_test',
+        name: 'Epigenetic Age Test Kit',
+        description: 'Measure your biological age with a comprehensive analysis of your DNA methylation patterns. Provides a baseline for tracking intervention efficacy.',
+        type: 'diagnostic',
+        evidence: [
+            { type: 'peer_reviewed_study', title: 'DNA methylation-based measures of biological age', source: 'Genome Biology', url: 'https://genomebiology.biomedcentral.com/articles/10.1186/s13059-021-02599-5', summary: 'Horvath and Raj review various epigenetic clocks and their strong correlation with chronological age and mortality risk.', metrics: {effectSize: 'r > 0.9', sampleSize: 'Multiple cohorts'} }
+        ],
+        researchStages: [],
+        engineeringStages: [], // No stages needed, it's a TRL 9 product
+        finalProduct: {
+            priceUSD: 299,
+            provider: 'Tally Health',
+            url: 'https://tallyhealth.com/'
+        }
+    },
+    {
+        id: 'mp_full_genome_seq',
+        name: 'Full Genome Sequencing',
+        description: 'Deep, 30x whole-genome sequencing to uncover genetic predispositions (e.g., APOE4 status) and inform personalized interventions.',
+        type: 'diagnostic',
+        evidence: [
+             { type: 'review_article', title: 'Whole-genome sequencing for personalized medicine', source: 'The Lancet', url: 'https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(21)01002-3/fulltext', summary: 'Discusses the utility of WGS in identifying rare disease variants and pharmacogenomic profiles, establishing it as a mature technology for personalized health.', metrics: {} }
+        ],
+        researchStages: [],
+        engineeringStages: [],
+        finalProduct: {
+            priceUSD: 599,
+            provider: 'Nebula Genomics',
+            url: 'https://nebula.org/'
+        }
+    },
+    {
+        id: 'mp_partial_reprogramming_therapy',
+        name: 'Partial Reprogramming Therapy',
+        description: 'Systemic rejuvenation therapy using transient expression of Yamanaka factors (OSK) to reset epigenetic clocks without inducing tumorigenesis.',
+        type: 'therapy',
+        evidence: [
+             { type: 'peer_reviewed_study', title: 'In vivo partial reprogramming of aged cells preserves identity and reverses hallmarks of aging', source: 'Cell', url: 'https://www.cell.com/cell/fulltext/S0092-8674(22)01332-X', summary: 'Demonstrated that cyclic expression of OSK in aged mice led to rejuvenated epigenetic signatures and restored function in multiple tissues without causing cancer.', metrics: { effectSize: '~30% age reversal by clock', sampleSize: 'N=aged mice'} },
+             { type: 'patent_filing', title: 'Methods for partial reprogramming of cells', source: 'USPTO', summary: 'Patents filed by major research institutes cover various methods for controlling Yamanaka factor expression to avoid pluripotency.'}
+        ],
+        researchStages: [
+            { id: 'prt_rs1', name: 'Confirm In-Vitro Safety', description: 'Rigorously test various cyclic OSK expression protocols on multiple human cell lines to confirm no loss of cell identity and zero teratoma formation.', agent: AgentType.GeneAnalyst, complexity: 10000, reward: { benchmark: 50, genetic: 500 } },
+            { id: 'prt_rs2', name: 'Identify Biomarkers', description: 'Analyze transcriptomic and proteomic data from in-vitro studies to find reliable biomarkers that track rejuvenation state and safety.', agent: AgentType.TrendSpotter, complexity: 25000, reward: { benchmark: 100, genetic: 1000 } }
+        ],
+        engineeringStages: [
+            { id: 'prt_es1', name: 'Develop Delivery Vector', description: 'Engineer a safe and efficient in-vivo delivery mechanism (e.g., AAV, lipid nanoparticle) for the OSK factors with controllable expression.', agent: AgentType.CompoundAnalyst, complexity: 50000, reward: { benchmark: 200, genetic: 2500 } },
+            { id: 'prt_es2', name: 'Pre-clinical Primate Study', description: 'Conduct a long-term study in non-human primates to demonstrate safety, efficacy, and optimal dosing strategy.', agent: AgentType.KnowledgeNavigator, complexity: 150000, reward: { benchmark: 500, genetic: 10000 } },
+            { id: 'prt_es3', name: 'Design Phase I Trial', description: 'Formulate a comprehensive plan for a Phase I human clinical trial, including inclusion/exclusion criteria, endpoints, and safety protocols.', agent: AgentType.Strategist, complexity: 80000, strategistPrompt: "Design a Phase I clinical trial for a partial reprogramming therapy. Propose three alternative trial designs, focusing on different patient cohorts (e.g., healthy elderly, progeria patients, specific age-related disease). Detail the primary safety endpoints, secondary efficacy biomarkers (e.g., epigenetic clocks), and estimated cost/timeline for each.", reward: { benchmark: 400 } },
+        ],
+    },
+    {
+        id: 'mp_nanobot_repair_swarm',
+        name: 'Nanobot Cellular Repair Swarm',
+        description: 'A theoretical swarm of programmable biological nanobots designed to identify and repair cellular damage, clear waste, and reverse aging processes at the molecular level.',
+        type: 'theoretical',
+        evidence: [
+             { type: 'peer_reviewed_study', title: 'A DNA nanorobot functions as a cancer therapeutic in response to a molecular trigger in vivo', source: 'Nature Biotechnology', url: 'https://www.nature.com/articles/nbt.4071', summary: 'Researchers designed a DNA-based nanorobot that could successfully target and treat tumors in mice, proving the principle of targeted molecular machines.', metrics: { effectSize: 'Significant tumor shrinkage', sampleSize: 'N=mice' } },
+             { type: 'expert_projection', title: 'The Singularity Is Near', source: 'Book by Ray Kurzweil', url: 'https://en.wikipedia.org/wiki/The_Singularity_Is_Near', summary: 'Kurzweil projects that by the 2030s, medical nanorobots will be capable of extending life indefinitely by repairing the body at a cellular level.', metrics: {} }
+        ],
+        researchStages: [
+            { id: 'nano_rs1', name: 'Molecular Manufacturing Blueprint', description: 'Design a self-replicating molecular assembler capable of constructing diamondoid components with atomic precision.', agent: AgentType.Strategist, complexity: 500000, reward: { benchmark: 1000 } },
+            { id: 'nano_rs2', name: 'Biocompatibility Analysis', description: 'Simulate the long-term interaction of diamondoid nanostructures with biological tissues to identify and mitigate potential toxicity and immune responses.', agent: AgentType.CompoundAnalyst, complexity: 300000, reward: { benchmark: 800 } },
+            { id: 'nano_rs3', name: 'Onboard Power Source', description: 'Theorize and model a viable onboard power source for a nanobot, such as glucose metabolism or acoustic energy harvesting.', agent: AgentType.KnowledgeNavigator, complexity: 400000, reward: { benchmark: 900 } },
+        ],
+        engineeringStages: [
+             { id: 'nano_es1', name: 'Swarm Coordination AI', description: 'Develop a decentralized AI capable of coordinating trillions of nanobots to perform complex tasks without a central controller.', agent: AgentType.Strategist, complexity: 1000000, reward: { benchmark: 2500 } },
+        ]
+    },
 ];
 
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useOdysseyLogic } from './hooks/useOdysseyLogic';
 import { useWorkspaceManager } from './hooks/useWorkspaceManager';
@@ -11,6 +11,9 @@ import WorkspaceView from './components/ResultsDisplay';
 import { ToastContainer } from './components/Toast';
 import DebugLogView from './components/DebugLogView';
 import QuestLog from './components/QuestLog';
+import InterventionMarketplace from './components/InterventionMarketplace';
+import { MARKETPLACE_INTERVENTIONS } from './constants';
+import { AgentType } from './types';
 
 const APP_STATE_STORAGE_KEY = 'agelessOdysseyState';
 
@@ -18,6 +21,8 @@ const App: React.FC = () => {
     const { logs, addLog, handleResetProgress, handleResetBudget } = useDebugLog();
     
     const settings = useAppSettings(addLog, APP_STATE_STORAGE_KEY);
+    
+    const [dispatchingStageId, setDispatchingStageId] = useState<string | null>(null);
     
     const { 
         odysseyState, 
@@ -34,6 +39,7 @@ const App: React.FC = () => {
         setTrajectoryState,
         setOdysseyState,
         setDynamicRealmDefinitions,
+        handleStageCompletion,
     } = useOdysseyLogic(settings.model, settings.apiKey, addLog, APP_STATE_STORAGE_KEY);
 
     const {
@@ -55,7 +61,8 @@ const App: React.FC = () => {
         setWorkspaceHistory,
         setTimeLapseIndex,
         setHasSearched,
-    } = useWorkspaceManager(settings, addLog, handleQuestCompletion, APP_STATE_STORAGE_KEY);
+        updateQuestProgress,
+    } = useWorkspaceManager(settings, addLog, APP_STATE_STORAGE_KEY);
     
     useAutonomousAgent({
         isAutonomousMode: settings.isAutonomousMode,
@@ -77,13 +84,50 @@ const App: React.FC = () => {
         setTimeLapseIndex,
         setIsAutonomousLoading: settings.setIsAutonomousLoading,
     });
+    
+    const handleGeneralDispatch = async (agentType: AgentType) => {
+        const response = await handleDispatchAgent({ agentType });
+        if(response) {
+            updateQuestProgress(topic, agentType, response, quests, handleQuestCompletion);
+        }
+    };
+
+    const handleFundAndDispatchStage = async (interventionId: string, stageId: string) => {
+        const intervention = MARKETPLACE_INTERVENTIONS.find(i => i.id === interventionId);
+        if (!intervention) return;
+        
+        const stage = [...intervention.researchStages, ...intervention.engineeringStages].find(s => s.id === stageId);
+        if (!stage) return;
+
+        if (odysseyState.vectors.memic < stage.complexity) {
+            setToasts(t => [...t, { id: Date.now(), title: 'Funding Failed', message: 'Insufficient Memic points to complete this R&D stage.', icon: 'error' }]);
+            return;
+        }
+        
+        setDispatchingStageId(stageId);
+        const query = stage.strategistPrompt || stage.description;
+        const response = await handleDispatchAgent({ agentType: stage.agent, query: query });
+
+        if (response) {
+            setToasts(prev => [...prev, { id: Date.now(), title: 'R&D Complete!', message: `Agent ${stage.agent} succeeded.`, icon: 'success' }]);
+            handleStageCompletion(interventionId, stage);
+        }
+        // If response is null, the error is already set by useWorkspaceManager
+        setDispatchingStageId(null);
+    }
+
 
     const currentWorkspace = workspaceHistory[timeLapseIndex];
   
     const Dashboard = () => (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 items-start">
-            <div className="lg:col-span-1 lg:sticky lg:top-8">
+            <div className="lg:col-span-1 flex flex-col gap-8 lg:sticky lg:top-8">
                 <QuestLog quests={quests} />
+                <InterventionMarketplace
+                    odysseyState={odysseyState}
+                    onDispatchAgent={handleFundAndDispatchStage}
+                    dispatchingStageId={dispatchingStageId}
+                />
             </div>
             <div className="lg:col-span-2">
                 <WorkspaceView
@@ -115,8 +159,8 @@ const App: React.FC = () => {
                 <AgentControlPanel
                     topic={topic}
                     setTopic={setTopic}
-                    onDispatchAgent={handleDispatchAgent}
-                    isLoading={isLoading || isSynthesizing || isOracleLoading || settings.isAutonomousLoading}
+                    onDispatchAgent={(agentType) => handleGeneralDispatch(agentType)}
+                    isLoading={isLoading || isSynthesizing || isOracleLoading || settings.isAutonomousLoading || !!dispatchingStageId}
                     model={settings.model}
                     setModel={settings.handleModelChange}
                     apiKey={settings.apiKey}

@@ -24,9 +24,10 @@ export const LinkIcon = ({ className = "h-4 w-4 inline-block mr-1" }) => (
     </svg>
 );
 
-export const LightbulbIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+export const LightbulbIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.311a15.018 15.018 0 0 1-6.75 0" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.344 3.071c.72.124 1.453.124 2.173 0a13.842 13.842 0 0 1 5.234 1.705 13.831 13.831 0 0 1 3.546 4.291 13.842 13.842 0 0 1 0 6.666 13.831 13.831 0 0 1-3.546 4.291 13.842 13.842 0 0 1-5.234 1.705 13.842 13.842 0 0 1-2.173 0 13.842 13.842 0 0 1-5.234-1.705 13.831 13.831 0 0 1-3.546-4.291 13.842 13.842 0 0 1 0-6.666 13.831 13.831 0 0 1 3.546-4.291 13.842 13.842 0 0 1 5.234-1.705Z" />
     </svg>
 );
 
@@ -199,6 +200,121 @@ export const ForgeIcon = ({className = "h-5 w-5"}) => (
     </svg>
 );
 
+export const CartIcon = ({className = "h-8 w-8"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c.51 0 .962-.343 1.087-.835l1.838-5.513c.22-1.02-.55-1.92-1.62-1.92H6.61a48.348 48.348 0 0 0-2.255-1.007M19.5 17.25a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+);
+
+export const PillIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.47-2.118L.792 7.524a3 3 0 0 1 2.97-2.585l7.025.268a3 3 0 0 1 2.586 2.971l.268 7.025a3 3 0 0 1-2.585 2.97Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14.47 14.47a3 3 0 0 0 5.78-1.128 2.25 2.25 0 0 1 2.47-2.118l.792-7.524a3 3 0 0 0-2.97-2.585l-7.025-.268a3 3 0 0 0-2.586 2.971l-.268 7.025a3 3 0 0 0 2.585 2.97Z" />
+    </svg>
+);
+
+export const TherapyIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+);
+
+export const DnaIcon = ({className = "h-6 w-6"}) => (
+     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 8.25 20.25H6A2.25 2.25 0 0 1 3.75 18v-2.25Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+    </svg>
+);
+
+export const BuildingStorefrontIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5A2.25 2.25 0 0 1 15.75 11.25h.5a2.25 2.25 0 0 1 2.25 2.25V21M6 21v-7.5A2.25 2.25 0 0 1 8.25 11.25h.5A2.25 2.25 0 0 1 11 13.5V21" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5v1.875A2.625 2.625 0 0 0 5.625 15h12.75A2.625 2.625 0 0 0 21 12.375V10.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.25v2.25A2.25 2.25 0 0 0 5.25 12.75h13.5A2.25 2.25 0 0 0 21 10.5V8.25" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5" />
+    </svg>
+);
+
+export const CurrencyDollarIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.825-1.106-2.156 0-2.981.554-.413 1.282-.659 2.003-.659c.768 0 1.536.219 2.14.659.879.659.879 1.838 0 2.498M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+);
+
+export const PresentationChartLineIcon = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12A2.25 2.25 0 0 0 20.25 14.25V3M3.75 21h16.5M16.5 3.75h.008v.008h-.008v-.008Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 6.75h.008v.008h-.008v-.008Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9.75h.008v.008H9v-.008Z" />
+    </svg>
+);
+
+export const CheckCircleIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    </svg>
+);
+
+export const FlaskIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v.217l4.243 4.242a1 1 0 11-1.414 1.414L12 8.414V13a1 1 0 01-1 1H9a1 1 0 01-1-1V8.414l-1.828 1.828a1 1 0 11-1.414-1.414L10 3.217V4a1 1 0 01-1-1z" clipRule="evenodd" />
+        <path d="M4.212 9.212a3.003 3.003 0 010-4.244 3 3 0 014.243 0L10 6.586l1.545-1.546a3 3 0 014.243 0 3.003 3.003 0 010 4.244L10 12.414l-5.788-5.788z" />
+    </svg>
+);
+
+export const ClipboardIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1z" />
+        <path fillRule="evenodd" d="M5 5a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V8a3 3 0 00-3-3H5zm-1 3a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1V8z" clipRule="evenodd" />
+    </svg>
+);
+
+export const BanknotesIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6V5.25M3.75 4.5A.75.75 0 0 1 4.5 3.75h1.5A.75.75 0 0 1 6.75 4.5v.75m0 0v1.5c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 0 1 3 6.75V6m18 9.75v-1.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v1.5m0 0v.75c0 .621.504 1.125 1.125 1.125h1.5c.621 0 1.125-.504 1.125-1.125V15.75m-6-9v1.5a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 .75-.75V6.75m0 0v-1.5A.75.75 0 0 0 15.75 4.5h-1.5A.75.75 0 0 0 13.5 5.25v1.5" />
+    </svg>
+);
+  
+export const ChartBarIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+    </svg>
+);
+
+export const AcademicCapIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18Zm-3.375-4.5a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 .75.75s0 .75-.75.75h-6a.75.75 0 0 1-.75-.75Z" />
+    </svg>
+);
+
+export const BeakerIcon = ({className = "h-4 w-4"}) => ( // Lab Study
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c.238.15.47.32.686.519l.243.243a2.25 2.25 0 0 1 0 3.182L5.25 14.5M9.75 3.104c.238-.15.47-.32.686-.519l.243-.243a2.25 2.25 0 0 0 0-3.182L5.25 4.5M5.25 4.5 9.75 9m0 0L14.25 4.5M5.25 4.5l4.5 4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 3.104c-1.144.72-2.348 1.488-3.606 2.288l-1.5 1.5a2.25 2.25 0 0 1-3.182 0l-4.5-4.5M18.75 3.104c.157-.099.31-.205.457-.318l.243-.243a2.25 2.25 0 0 0 0-3.182L15 2.25M18.75 3.104c.157.099.31.205.457.318l.243.243a2.25 2.25 0 0 1 0 3.182L15 9.75M15 9.75 18.75 6" />
+    </svg>
+);
+
+export const UserGroupIcon = ({className = "h-4 w-4"}) => ( // Clinical Trial
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.742-.586 1.487 1.487 0 0 0 .917-1.543V13.5A2.25 2.25 0 0 0 20.25 11.25H18M18 18.72a9.003 9.003 0 0 1-11.838 0M18 18.72h-5.25M6 18.72a9.094 9.094 0 0 1-3.742-.586 1.487 1.487 0 0 1-.917-1.543V13.5A2.25 2.25 0 0 1 3.75 11.25H6M6 18.72a9.003 9.003 0 0 0 11.838 0M6 18.72h5.25m5.25-13.5-3-3m0 0-3 3m3-3v11.25" />
+    </svg>
+);
+
+export const DocumentTextIcon = ({className = "h-4 w-4"}) => ( // Paper/Patent
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+    </svg>
+);
+
+export const SignalIcon = ({className="h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.75h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5M5.25 3.75h13.5a1.5 1.5 0 0 1 1.5 1.5v13.5a1.5 1.5 0 0 1-1.5 1.5h-13.5a1.5 1.5 0 0 1-1.5-1.5v-13.5a1.5 1.5 0 0 1 1.5-1.5Z" />
+    </svg>
+);
+
+
 
 // --- Realm Icons ---
 export const ShellIcon = ({className="h-6 w-6"}) => ( // Mortal Shell
@@ -253,5 +369,25 @@ export const MemicIcon = ({className = "h-6 w-6"}) => (
         <path d="M20 10v2a2 2 0 0 1-2 2h-2"/>
         <path d="M8 12H6a2 2 0 0 0-2 2v2"/>
         <path d="M4 10v2a2 2 0 0 0 2 2h2"/>
+    </svg>
+);
+
+// R&D Stage Icons
+export const MicroscopeIcon = ({className="h-5 w-5"}) => ( // Research
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 7.5v6m3-3h-6" />
+    </svg>
+);
+
+export const WrenchScrewdriverIcon = ({className="h-5 w-5"}) => ( // Engineering
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+    </svg>
+);
+
+export const ClipboardDocumentCheckIcon = ({className="h-5 w-5"}) => ( // Completed
+     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
 );

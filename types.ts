@@ -59,6 +59,7 @@ export enum AgentType {
     CompoundAnalyst = "Compound Analyst",
     TrendSpotter = "Trend Spotter",
     QuestCrafter = "Quest Crafter",
+    Strategist = "Strategist", // New agent for decision support
 }
 
 export interface ModelDefinition {
@@ -207,6 +208,64 @@ export interface Achievement {
   xp: number; 
 }
 
+
+export interface Evidence {
+    type: 'peer_reviewed_study' | 'clinical_trial_result' | 'review_article' | 'patent_filing' | 'expert_projection';
+    title: string;
+    source: string;
+    url?: string;
+    summary: string;
+    metrics?: {
+        effectSize?: string;
+        pValue?: string;
+        sampleSize?: string;
+    };
+}
+
+export interface RAndDStage {
+    id: string;
+    name: string;
+    description: string;
+    complexity: number; // Memic cost to complete
+    agent: AgentType;
+    strategistPrompt?: string; // Optional complex prompt for strategist agent
+    reward?: {
+        memic?: number;
+        genetic?: number;
+        benchmark?: number;
+    };
+}
+
+export enum HypeCyclePhase {
+    InnovationTrigger = "Innovation Trigger",
+    PeakOfInflatedExpectations = "Peak of Inflated Expectations",
+    TroughOfDisillusionment = "Trough of Disillusionment",
+    SlopeOfEnlightenment = "Slope of Enlightenment",
+    PlateauOfProductivity = "Plateau of Productivity",
+}
+
+
+export interface MarketplaceIntervention {
+    id: string;
+    name: string;
+    description: string;
+    type: 'diagnostic' | 'supplement' | 'therapy' | 'consultation' | 'theoretical';
+    
+    evidence: Evidence[];
+
+    // TRL is now implicit, calculated from stage completion
+    researchStages: RAndDStage[];
+    engineeringStages: RAndDStage[];
+    
+    // Final product details, for when TRL 9 is reached
+    finalProduct?: {
+        priceUSD: number;
+        provider: string;
+        url: string;
+    };
+}
+
+
 export interface OdysseyState {
   realm: string; // Changed to string to allow dynamic, AI-generated realms
   vectors: {
@@ -217,13 +276,14 @@ export interface OdysseyState {
   benchmarkScore: number; // Represents the system's clarity and understanding
   longevityScore: number; // The core metric driving the cognitive vector
   achievements: Record<string, Achievement>;
+  completedStages: Record<string, string[]>; // interventionId -> array of completed stageIds
 }
 
 export interface ToastMessage {
     id: number;
     title: string;
     message: string;
-    icon?: 'achievement' | 'levelup' | 'ascension' | 'oracle' | 'quest';
+    icon?: 'achievement' | 'levelup' | 'ascension' | 'oracle' | 'quest' | 'error' | 'success' | 'purchase' | 'investment';
 }
 
 export interface Citation {
@@ -232,7 +292,7 @@ export interface Citation {
 }
 
 export interface Quest {
-    id: string;
+    id:string;
     title: string;
     description: string;
     objective: {

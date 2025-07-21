@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
     type OdysseyState, type Quest, type TrajectoryState, type ToastMessage, type RealmDefinition, 
-    type ModelDefinition, Realm, WorkspaceState 
+    type ModelDefinition, Realm, WorkspaceState, MarketplaceIntervention, RAndDStage
 } from '../types';
 import { getInitialTrajectory, applyIntervention } from '../services/trajectoryService';
 import { callAscensionOracle } from '../services/geminiService';
-import { ACHIEVEMENTS, QUESTS, REALM_DEFINITIONS, SUPPORTED_MODELS } from '../constants';
+import { ACHIEVEMENTS, QUESTS, REALM_DEFINITIONS, MARKETPLACE_INTERVENTIONS, SUPPORTED_MODELS } from '../constants';
 
 const getInitialOdysseyState = (): OdysseyState => {
   const achievements = Object.entries(ACHIEVEMENTS).reduce((acc, [key, value]) => {
@@ -19,6 +19,7 @@ const getInitialOdysseyState = (): OdysseyState => {
     benchmarkScore: 0,
     longevityScore: 0,
     achievements,
+    completedStages: {},
   };
 };
 
@@ -54,7 +55,7 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
         }
     }, [addLog, storageKey]);
 
-    const updateAscensionState = useCallback((action: 'QUEST_COMPLETED' | 'UNLOCK_ACHIEVEMENT' | 'UPDATE_LONGEVITY_SCORE', payload?: any) => {
+    const updateAscensionState = useCallback((action: 'QUEST_COMPLETED' | 'UNLOCK_ACHIEVEMENT' | 'UPDATE_LONGEVITY_SCORE' | 'STAGE_COMPLETED', payload?: any) => {
         setOdysseyState(prevOdysseyState => {
             let newMemic = prevOdysseyState.vectors.memic;
             let newGenetic = prevOdysseyState.vectors.genetic;
@@ -64,6 +65,17 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
             const newToasts: ToastMessage[] = [];
             
             switch(action) {
+                case 'STAGE_COMPLETED': {
+                    if (payload?.stage) {
+                        const stage = payload.stage as RAndDStage;
+                        const benchmarkMultiplier = 1 + (newBenchmarkScore / 1000);
+                        newMemic += Math.round((stage.reward?.memic || 0) * benchmarkMultiplier);
+                        newGenetic += (stage.reward?.genetic || 0);
+                        newBenchmarkScore += (stage.reward?.benchmark || 0);
+                        newToasts.push({ id: Date.now(), title: 'R&D Investment Return!', message: `Gained Memic, Genetic, and Benchmark points.`, icon: 'investment' });
+                    }
+                    break;
+                }
                 case 'QUEST_COMPLETED': {
                     if (payload?.quest) {
                         const quest = payload.quest as Quest;
@@ -167,6 +179,28 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
             });
         }
     }, [updateAscensionState, addLog]);
+    
+    const handleStageCompletion = useCallback((interventionId: string, stage: RAndDStage) => {
+        addLog(`[R&D] Completing stage "${stage.name}". Cost: ${stage.complexity} Memic.`);
+        
+        setOdysseyState(prev => {
+            const newCompleted = { ...prev.completedStages };
+            if (!newCompleted[interventionId]) {
+                newCompleted[interventionId] = [];
+            }
+            newCompleted[interventionId].push(stage.id);
+
+            const newVectors = { ...prev.vectors };
+            newVectors.memic -= stage.complexity;
+
+            return { ...prev, vectors: newVectors, completedStages: newCompleted };
+        });
+
+        // Apply rewards after state update, which will also trigger a toast
+        updateAscensionState('STAGE_COMPLETED', { stage });
+
+    }, [addLog, updateAscensionState]);
+
 
     // Effect to update available quests based on current realm
     useEffect(() => {
@@ -199,5 +233,6 @@ export const useOdysseyLogic = (model: ModelDefinition, apiKey: string, addLog: 
         handleApplyIntervention,
         handleQuestCompletion,
         updateAscensionState,
+        handleStageCompletion,
     };
 };
